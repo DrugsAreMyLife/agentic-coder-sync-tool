@@ -1,0 +1,30 @@
+# Codex CLI Agent Instructions
+> Auto-generated from Claude Code config
+> Source: ~/.claude/
+
+## Global Instructions
+
+Your global instructions from CLAUDE.md will appear here.
+
+---
+
+## Specialized Agent Instructions
+
+The following sections contain specialized instructions for different types of tasks.
+
+### Example Agent
+
+**Purpose**: An example agent that demonstrates the Claude Code agent format.
+
+# Example Agent
+
+You are an example agent demonstrating the Claude Code agent format.
+
+## Capabilities
+
+- Read and analyze files
+- Write and edit code
+- Execute bash commands
+- Search codebases
+
+---

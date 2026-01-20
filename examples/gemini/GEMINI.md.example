@@ -1,0 +1,18 @@
+# Gemini CLI Configuration
+> Auto-generated from Claude Code config
+> Source: ~/.claude/
+
+## Global Instructions (from CLAUDE.md)
+
+Your global instructions from CLAUDE.md will appear here.
+
+## Available Agents
+
+| Agent | Description | Model |
+|-------|-------------|-------|
+| example-agent | An example agent that demonstrates the Claude Code agent format... | sonnet |
+
+## Available Skills
+
+### example-skill
+An example skill that demonstrates the Claude Code skill format.
