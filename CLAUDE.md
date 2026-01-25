@@ -58,6 +58,8 @@ cd src
 python3 sync_agents.py              # Interactive menu
 python3 sync_agents.py --list       # List components
 python3 sync_agents.py --all        # Sync to all platforms
+python3 sync_agents.py --export     # Export to portable bundle
+python3 sync_agents.py --import X   # Import from bundle
 python3 sync_agents.py --help       # Show help
 ```
 

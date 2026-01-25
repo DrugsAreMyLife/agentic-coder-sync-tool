@@ -131,6 +131,41 @@ python sync_agents.py --list
 python sync_agents.py --all --verbose
 ```
 
+### Export & Import Bundles
+
+Create portable configuration archives to backup, share, or migrate your setup:
+
+```bash
+# Export everything to a timestamped bundle
+python sync_agents.py --export
+
+# Export to a specific file (without plugins for smaller size)
+python sync_agents.py --export my-config.tar.gz --no-plugins
+
+# Import from a bundle (replaces existing config, creates backup first)
+python sync_agents.py --import claude-bundle.tar.gz
+
+# Import and merge with existing config
+python sync_agents.py --import claude-bundle.tar.gz --merge
+
+# Import without creating backup
+python sync_agents.py --import claude-bundle.tar.gz --no-backup
+
+# Preview what would be imported
+python sync_agents.py --import claude-bundle.tar.gz --dry-run
+```
+
+Bundle contents:
+- `agents/` - All agent definitions
+- `skills/` - All skills with scripts/references/assets
+- `commands/` - All slash commands
+- `hooks/` - Hook scripts
+- `plugins/` - Plugin directories (optional, can be large)
+- `settings.json` - Hook configuration
+- `.mcp.json` - MCP server configuration
+- `CLAUDE.md` - Global instructions
+- `manifest.json` - Bundle metadata
+
 ### Available Flags
 
 | Flag | Description |
@@ -142,6 +177,11 @@ python sync_agents.py --all --verbose
 | `--dry-run, -n` | Preview changes |
 | `--verbose, -v` | Verbose output |
 | `--interactive, -i` | Force interactive mode |
+| `--export, -e` | Export config to bundle |
+| `--import FILE` | Import config from bundle |
+| `--merge` | Merge with existing (don't replace) |
+| `--no-backup` | Skip backup on import |
+| `--no-plugins` | Exclude plugins from export |
 
 ## Supported Platforms
 

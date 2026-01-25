@@ -1215,6 +1215,348 @@ web_search_request = true
             self.sync_log_path.parent.mkdir(parents=True, exist_ok=True)
             self.sync_log_path.write_text(json.dumps(state, indent=2))
 
+    # =========================================================================
+    # Export/Import Bundle
+    # =========================================================================
+
+    def export_bundle(self, output_path: Optional[Path] = None, include_plugins: bool = True) -> Path:
+        """
+        Export all Claude Code components to a compressed bundle.
+
+        Creates a .tar.gz archive containing:
+        - agents/       All agent definitions
+        - skills/       All skills with their subdirectories
+        - commands/     All slash commands
+        - hooks/        Hook scripts
+        - plugins/      Plugin directories (optional)
+        - settings.json Hook configuration
+        - .mcp.json     MCP server configuration
+        - CLAUDE.md     Global instructions
+        - manifest.json Bundle metadata
+
+        Args:
+            output_path: Custom output path (default: claude-bundle-TIMESTAMP.tar.gz)
+            include_plugins: Whether to include plugins (can be large)
+
+        Returns:
+            Path to the created bundle file
+        """
+        import tarfile
+        import tempfile
+
+        self.load_all_claude()
+
+        # Generate output filename
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        if output_path is None:
+            output_path = Path.cwd() / f"claude-bundle-{timestamp}.tar.gz"
+        else:
+            output_path = Path(output_path)
+            if output_path.is_dir():
+                output_path = output_path / f"claude-bundle-{timestamp}.tar.gz"
+
+        self.log(f"Creating bundle: {output_path}", "info")
+
+        # Create manifest
+        manifest = {
+            "version": "1.0",
+            "created": datetime.now().isoformat(),
+            "source": "claude-code",
+            "components": {
+                "agents": len(self.agents),
+                "skills": len(self.skills),
+                "commands": len(self.commands),
+                "hooks": len(self.hooks),
+                "plugins": len(self.plugins) if include_plugins else 0,
+                "mcp_servers": len(self.mcp_config),
+            },
+            "agent_names": [a.name for a in self.agents],
+            "skill_names": [s.name for s in self.skills],
+            "plugin_names": [p.name for p in self.plugins] if include_plugins else [],
+        }
+
+        if self.dry_run:
+            self.log("Would create bundle with:", "dry")
+            for component, count in manifest["components"].items():
+                self.log(f"  {component}: {count}", "dry")
+            return output_path
+
+        # Create temporary directory for staging
+        with tempfile.TemporaryDirectory() as tmpdir:
+            staging = Path(tmpdir) / "claude-bundle"
+            staging.mkdir()
+
+            # Copy agents
+            if self.claude_agents.exists():
+                agents_dest = staging / "agents"
+                shutil.copytree(self.claude_agents, agents_dest)
+                self.log(f"  Added {len(list(agents_dest.glob('*.md')))} agents", "info")
+
+            # Copy skills
+            if self.claude_skills.exists():
+                skills_dest = staging / "skills"
+                shutil.copytree(self.claude_skills, skills_dest)
+                self.log(f"  Added {len(list(skills_dest.iterdir()))} skills", "info")
+
+            # Copy commands
+            if self.claude_commands.exists():
+                commands_dest = staging / "commands"
+                shutil.copytree(self.claude_commands, commands_dest)
+                self.log(f"  Added {len(list(commands_dest.glob('*.md')))} commands", "info")
+
+            # Copy hooks
+            if self.claude_hooks.exists():
+                hooks_dest = staging / "hooks"
+                shutil.copytree(self.claude_hooks, hooks_dest)
+                self.log(f"  Added hooks directory", "info")
+
+            # Copy plugins (optional)
+            if include_plugins and self.claude_plugins.exists():
+                plugins_dest = staging / "plugins"
+                shutil.copytree(self.claude_plugins, plugins_dest)
+                self.log(f"  Added {len(list(plugins_dest.iterdir()))} plugins", "info")
+
+            # Copy settings.json
+            if self.claude_settings.exists():
+                shutil.copy2(self.claude_settings, staging / "settings.json")
+                self.log("  Added settings.json", "info")
+
+            # Copy .mcp.json
+            if self.claude_mcp.exists():
+                shutil.copy2(self.claude_mcp, staging / ".mcp.json")
+                self.log("  Added .mcp.json", "info")
+
+            # Copy CLAUDE.md
+            if self.claude_md.exists():
+                shutil.copy2(self.claude_md, staging / "CLAUDE.md")
+                self.log("  Added CLAUDE.md", "info")
+
+            # Write manifest
+            (staging / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+            # Create tar.gz archive
+            with tarfile.open(output_path, "w:gz") as tar:
+                tar.add(staging, arcname="claude-bundle")
+
+        # Calculate size
+        size_mb = output_path.stat().st_size / (1024 * 1024)
+        self.log(f"Bundle created: {output_path} ({size_mb:.2f} MB)", "success")
+
+        return output_path
+
+    def import_bundle(self, bundle_path: Path, merge: bool = False, backup: bool = True) -> bool:
+        """
+        Import Claude Code components from a compressed bundle.
+
+        Args:
+            bundle_path: Path to the .tar.gz bundle file
+            merge: If True, merge with existing; if False, replace
+            backup: If True, backup existing config before import
+
+        Returns:
+            True if import successful, False otherwise
+        """
+        import tarfile
+        import tempfile
+
+        bundle_path = Path(bundle_path)
+        if not bundle_path.exists():
+            self.log(f"Bundle not found: {bundle_path}", "error")
+            return False
+
+        if not bundle_path.suffix == ".gz" and not str(bundle_path).endswith(".tar.gz"):
+            self.log("Bundle must be a .tar.gz file", "error")
+            return False
+
+        self.log(f"Importing bundle: {bundle_path}", "info")
+
+        # Extract to temp directory first to validate
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                with tarfile.open(bundle_path, "r:gz") as tar:
+                    tar.extractall(tmpdir)
+            except tarfile.TarError as e:
+                self.log(f"Failed to extract bundle: {e}", "error")
+                return False
+
+            # Find the bundle directory
+            extracted = Path(tmpdir)
+            bundle_dir = extracted / "claude-bundle"
+            if not bundle_dir.exists():
+                # Try to find it
+                for item in extracted.iterdir():
+                    if item.is_dir():
+                        bundle_dir = item
+                        break
+
+            # Read manifest
+            manifest_path = bundle_dir / "manifest.json"
+            if manifest_path.exists():
+                manifest = json.loads(manifest_path.read_text())
+                self.log(f"Bundle version: {manifest.get('version', 'unknown')}", "info")
+                self.log(f"Created: {manifest.get('created', 'unknown')}", "info")
+                components = manifest.get("components", {})
+                for comp, count in components.items():
+                    self.log(f"  {comp}: {count}", "info")
+            else:
+                self.log("No manifest found, proceeding anyway", "warning")
+
+            if self.dry_run:
+                self.log("Would import the above components", "dry")
+                if not merge:
+                    self.log("Would REPLACE existing configuration", "dry")
+                else:
+                    self.log("Would MERGE with existing configuration", "dry")
+                return True
+
+            # Backup existing config if requested
+            if backup and self.claude_dir.exists():
+                backup_path = self._create_backup()
+                if backup_path:
+                    self.log(f"Backup created: {backup_path}", "info")
+
+            # Ensure claude directory exists
+            self.claude_dir.mkdir(parents=True, exist_ok=True)
+
+            # Import each component
+            components_imported = []
+
+            # Agents
+            src_agents = bundle_dir / "agents"
+            if src_agents.exists():
+                if not merge and self.claude_agents.exists():
+                    shutil.rmtree(self.claude_agents)
+                self.claude_agents.mkdir(parents=True, exist_ok=True)
+                for agent_file in src_agents.glob("*.md"):
+                    dest = self.claude_agents / agent_file.name
+                    if merge and dest.exists():
+                        self.log(f"  Skipping existing agent: {agent_file.stem}", "info")
+                    else:
+                        shutil.copy2(agent_file, dest)
+                        components_imported.append(f"agent:{agent_file.stem}")
+
+            # Skills
+            src_skills = bundle_dir / "skills"
+            if src_skills.exists():
+                if not merge and self.claude_skills.exists():
+                    shutil.rmtree(self.claude_skills)
+                self.claude_skills.mkdir(parents=True, exist_ok=True)
+                for skill_dir in src_skills.iterdir():
+                    if skill_dir.is_dir():
+                        dest = self.claude_skills / skill_dir.name
+                        if merge and dest.exists():
+                            self.log(f"  Skipping existing skill: {skill_dir.name}", "info")
+                        else:
+                            if dest.exists():
+                                shutil.rmtree(dest)
+                            shutil.copytree(skill_dir, dest)
+                            components_imported.append(f"skill:{skill_dir.name}")
+
+            # Commands
+            src_commands = bundle_dir / "commands"
+            if src_commands.exists():
+                if not merge and self.claude_commands.exists():
+                    shutil.rmtree(self.claude_commands)
+                self.claude_commands.mkdir(parents=True, exist_ok=True)
+                for cmd_file in src_commands.glob("*.md"):
+                    dest = self.claude_commands / cmd_file.name
+                    if merge and dest.exists():
+                        self.log(f"  Skipping existing command: {cmd_file.stem}", "info")
+                    else:
+                        shutil.copy2(cmd_file, dest)
+                        components_imported.append(f"command:{cmd_file.stem}")
+
+            # Hooks
+            src_hooks = bundle_dir / "hooks"
+            if src_hooks.exists():
+                if not merge and self.claude_hooks.exists():
+                    shutil.rmtree(self.claude_hooks)
+                self.claude_hooks.mkdir(parents=True, exist_ok=True)
+                for hook_file in src_hooks.iterdir():
+                    dest = self.claude_hooks / hook_file.name
+                    if merge and dest.exists():
+                        self.log(f"  Skipping existing hook: {hook_file.name}", "info")
+                    else:
+                        if hook_file.is_dir():
+                            if dest.exists():
+                                shutil.rmtree(dest)
+                            shutil.copytree(hook_file, dest)
+                        else:
+                            shutil.copy2(hook_file, dest)
+                        components_imported.append(f"hook:{hook_file.name}")
+
+            # Plugins
+            src_plugins = bundle_dir / "plugins"
+            if src_plugins.exists():
+                if not merge and self.claude_plugins.exists():
+                    shutil.rmtree(self.claude_plugins)
+                self.claude_plugins.mkdir(parents=True, exist_ok=True)
+                for plugin_dir in src_plugins.iterdir():
+                    if plugin_dir.is_dir():
+                        dest = self.claude_plugins / plugin_dir.name
+                        if merge and dest.exists():
+                            self.log(f"  Skipping existing plugin: {plugin_dir.name}", "info")
+                        else:
+                            if dest.exists():
+                                shutil.rmtree(dest)
+                            shutil.copytree(plugin_dir, dest)
+                            components_imported.append(f"plugin:{plugin_dir.name}")
+
+            # Settings
+            src_settings = bundle_dir / "settings.json"
+            if src_settings.exists():
+                if merge and self.claude_settings.exists():
+                    # Merge settings
+                    existing = json.loads(self.claude_settings.read_text())
+                    incoming = json.loads(src_settings.read_text())
+                    # Deep merge hooks array
+                    if "hooks" in incoming:
+                        existing_hooks = existing.get("hooks", [])
+                        for hook in incoming["hooks"]:
+                            if hook not in existing_hooks:
+                                existing_hooks.append(hook)
+                        existing["hooks"] = existing_hooks
+                    self.claude_settings.write_text(json.dumps(existing, indent=2))
+                else:
+                    shutil.copy2(src_settings, self.claude_settings)
+                components_imported.append("settings.json")
+
+            # MCP config
+            src_mcp = bundle_dir / ".mcp.json"
+            if src_mcp.exists():
+                if merge and self.claude_mcp.exists():
+                    # Merge MCP configs
+                    existing = json.loads(self.claude_mcp.read_text())
+                    incoming = json.loads(src_mcp.read_text())
+                    existing.update(incoming)
+                    self.claude_mcp.write_text(json.dumps(existing, indent=2))
+                else:
+                    shutil.copy2(src_mcp, self.claude_mcp)
+                components_imported.append(".mcp.json")
+
+            # CLAUDE.md
+            src_claude_md = bundle_dir / "CLAUDE.md"
+            if src_claude_md.exists():
+                if merge and self.claude_md.exists():
+                    self.log("  Skipping CLAUDE.md (merge mode)", "info")
+                else:
+                    shutil.copy2(src_claude_md, self.claude_md)
+                    components_imported.append("CLAUDE.md")
+
+        self.log(f"Imported {len(components_imported)} components", "success")
+        return True
+
+    def _create_backup(self) -> Optional[Path]:
+        """Create a backup of existing Claude config."""
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = self.home / f".claude-backup-{timestamp}.tar.gz"
+
+        try:
+            return self.export_bundle(backup_path, include_plugins=True)
+        except Exception as e:
+            self.log(f"Backup failed: {e}", "warning")
+            return None
+
     def list_components(self):
         """List all components that would be synced (no emojis)."""
         self.load_all_claude()
@@ -1291,6 +1633,8 @@ Modes:
   --all / -a             Sync to all platforms
   --platform / -p        Sync to specific platform
   --list / -l            List all syncable components
+  --export / -e          Export config to portable bundle
+  --import FILE          Import config from bundle
 
 Supported Platforms:
   gemini, antigravity, codex, opencode, trae, continue,
@@ -1302,6 +1646,10 @@ Examples:
   %(prog)s --platform gemini        Sync only to Gemini CLI
   %(prog)s --list                   List all syncable components
   %(prog)s --dry-run --all          Preview sync without changes
+  %(prog)s --export                 Export to claude-bundle-TIMESTAMP.tar.gz
+  %(prog)s --export my-config.tar.gz   Export to specific file
+  %(prog)s --import bundle.tar.gz  Import from bundle (replaces config)
+  %(prog)s --import bundle.tar.gz --merge  Import and merge with existing
         """
     )
 
@@ -1311,18 +1659,37 @@ Examples:
     parser.add_argument("--dry-run", "-n", action="store_true", help="Preview changes")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--interactive", "-i", action="store_true", help="Force interactive mode")
+    parser.add_argument("--export", "-e", nargs="?", const=True, metavar="FILE",
+                        help="Export all config to compressed bundle")
+    parser.add_argument("--import", dest="import_file", metavar="FILE",
+                        help="Import config from compressed bundle")
+    parser.add_argument("--merge", action="store_true",
+                        help="Merge imported config with existing (default: replace)")
+    parser.add_argument("--no-backup", action="store_true",
+                        help="Skip backup when importing (default: create backup)")
+    parser.add_argument("--no-plugins", action="store_true",
+                        help="Exclude plugins from export (smaller bundle)")
 
     args = parser.parse_args()
     syncer = AgentSync(dry_run=args.dry_run, verbose=args.verbose)
 
     # Determine mode
-    if args.list:
+    if args.export:
+        output_path = None if args.export is True else Path(args.export)
+        syncer.export_bundle(output_path, include_plugins=not args.no_plugins)
+    elif args.import_file:
+        syncer.import_bundle(
+            Path(args.import_file),
+            merge=args.merge,
+            backup=not args.no_backup
+        )
+    elif args.list:
         syncer.list_components()
     elif args.all:
         syncer.sync_all()
     elif args.platform:
         syncer.sync_platform(args.platform)
-    elif args.interactive or not any([args.all, args.platform, args.list]):
+    elif args.interactive or not any([args.all, args.platform, args.list, args.export, args.import_file]):
         # Launch interactive menu when no arguments provided
         try:
             from menu.main_menu import MainMenu

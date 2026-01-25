@@ -47,7 +47,11 @@ class MainMenu(BaseMenu):
                 SyncMenu(self.syncer).run()
             elif choice == '7':
                 self._show_platform_status()
-            elif choice in ('8', 'q', 'quit', 'exit'):
+            elif choice == '8':
+                self._export_bundle()
+            elif choice == '9':
+                self._import_bundle()
+            elif choice in ('0', 'q', 'quit', 'exit'):
                 return None
             else:
                 self.print_error("Invalid choice")
@@ -87,7 +91,11 @@ class MainMenu(BaseMenu):
         print()
         self.draw_option("7", "Platform Status", "Check installation status")
         print()
-        self.draw_option("8", "Exit")
+        self.draw_option("8", "Export Bundle", "Create portable config archive")
+        print()
+        self.draw_option("9", "Import Bundle", "Restore config from archive")
+        print()
+        self.draw_option("0", "Exit")
 
     def _show_platform_status(self) -> None:
         """Display platform installation status."""
@@ -135,3 +143,102 @@ class MainMenu(BaseMenu):
         if not path.exists():
             return 0
         return sum(1 for d in path.iterdir() if d.is_dir() and (d / "SKILL.md").exists())
+
+    def _export_bundle(self) -> None:
+        """Interactive export bundle wizard."""
+        self.clear_screen()
+        self.draw_box("EXPORT BUNDLE")
+
+        c = self.colors
+
+        # Show what will be exported
+        self.draw_section("Components to export:")
+        print(f"  - {len(self.syncer.agents)} agents")
+        print(f"  - {len(self.syncer.skills)} skills")
+        print(f"  - {len(self.syncer.commands)} commands")
+        print(f"  - {len(self.syncer.hooks)} hooks")
+        print(f"  - {len(self.syncer.plugins)} plugins")
+        print(f"  - MCP servers config")
+        print(f"  - settings.json")
+        print(f"  - CLAUDE.md")
+        print()
+
+        # Ask about plugins (they can be large)
+        include_plugins = self.prompt_confirm("Include plugins? (can be large)")
+
+        # Ask for custom filename
+        print()
+        custom_path = self.prompt_text("Output filename (leave empty for default)")
+
+        output_path = Path(custom_path) if custom_path else None
+
+        print()
+        if self.prompt_confirm("Create export bundle?"):
+            try:
+                result_path = self.syncer.export_bundle(output_path, include_plugins=include_plugins)
+                print()
+                self.print_success(f"Bundle created: {result_path}")
+            except Exception as e:
+                self.print_error(f"Export failed: {e}")
+
+        self.wait_for_key()
+
+    def _import_bundle(self) -> None:
+        """Interactive import bundle wizard."""
+        self.clear_screen()
+        self.draw_box("IMPORT BUNDLE")
+
+        c = self.colors
+
+        # Get bundle path
+        bundle_path = self.prompt_text("Path to bundle file (.tar.gz)")
+        if not bundle_path:
+            self.print_info("Import cancelled")
+            self.wait_for_key()
+            return
+
+        bundle = Path(bundle_path).expanduser()
+        if not bundle.exists():
+            self.print_error(f"File not found: {bundle}")
+            self.wait_for_key()
+            return
+
+        # Show import options
+        print()
+        self.draw_section("Import options:")
+        print("  [1] Replace - Clear existing config and import bundle")
+        print("  [2] Merge   - Keep existing, add new from bundle")
+        print("  [3] Cancel")
+        print()
+
+        choice = self.prompt("Select mode:")
+
+        if choice == '3' or choice.lower() == 'q':
+            self.print_info("Import cancelled")
+            self.wait_for_key()
+            return
+
+        merge = (choice == '2')
+        mode_str = "MERGE with" if merge else "REPLACE"
+
+        print()
+        self.print_info(f"Mode: {mode_str} existing config")
+
+        # Backup option
+        create_backup = self.prompt_confirm("Create backup before import?", default=True)
+
+        print()
+        if self.prompt_confirm(f"Proceed with import?"):
+            try:
+                success = self.syncer.import_bundle(bundle, merge=merge, backup=create_backup)
+                print()
+                if success:
+                    self.print_success("Import complete!")
+                    # Reload components
+                    self.syncer.load_all_claude()
+                else:
+                    self.print_error("Import failed")
+            except Exception as e:
+                self.print_error(f"Import failed: {e}")
+
+        self.wait_for_key()
