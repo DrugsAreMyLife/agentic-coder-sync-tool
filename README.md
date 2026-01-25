@@ -1,6 +1,45 @@
-# Agentic Coder Sync Tool
+# Agent Management & Sync Suite
 
-Synchronize your AI coding agent configurations across **14+ platforms** with bidirectional support. Keep your agents, skills, commands, hooks, and plugins in sync between Claude Code, Gemini CLI, Codex CLI, Cursor, Windsurf, Roo Code, Kiro, GitHub Copilot, Continue, Aider, and more.
+A comprehensive CLI tool for managing and synchronizing Claude Code agents, skills, plugins, commands, and hooks across **14+ AI coding platforms**. Features an interactive menu system with colorful output, agent relationship visualization, and platform sync management.
+
+## Quick Start
+
+```bash
+cd src
+python3 sync_agents.py        # Launch interactive menu
+python3 sync_agents.py --all  # Sync to all platforms
+```
+
+## Interactive Menu
+
+Run without arguments for the full interactive experience:
+
+```
++---------------------------------------------------------+
+|  AGENT MANAGEMENT & SYNC SUITE                          |
++---------------------------------------------------------+
+
+  26 agents | 23 skills | 2 plugins
+
+  [1] Agent Manager
+  [2] Skill Browser & Builder
+  [3] Plugin Browser & Builder
+  [4] Command Browser & Builder
+  [5] Hook Browser & Builder
+  [6] Sync to Platforms
+  [7] Platform Status
+  [8] Exit
+
+>
+```
+
+### Features
+- **Agent Manager** - Browse agents with hierarchy visualization and relationship graphs
+- **Skill Browser** - Create, edit, categorize, and sync skills
+- **Plugin Browser** - Explore installed plugins with component breakdown
+- **Command Browser** - View and create slash commands
+- **Hook Browser** - Manage event hooks with enable/disable
+- **Platform Sync** - One-click export to 12+ AI coding platforms
 
 ## Why?
 
@@ -63,62 +102,46 @@ python "${SKILL_DIR}/scripts/sync_agents.py" --all
 
 ## Usage
 
-### Sync to All Platforms
+### Interactive Mode (Recommended)
 
 ```bash
+cd src
+python sync_agents.py           # Full interactive menu
+python sync_agents.py -i        # Force interactive mode
+```
+
+### Command Line Mode
+
+```bash
+# Sync to all platforms
 python sync_agents.py --all
-```
 
-### Bidirectional Sync
-
-Sync in both directions (Claude ↔ others):
-
-```bash
-python sync_agents.py --all --bidirectional
-```
-
-### Sync to Specific Platform
-
-```bash
-# Gemini CLI and Antigravity
+# Sync to specific platform
 python sync_agents.py --platform gemini
-
-# Codex CLI
 python sync_agents.py --platform codex
+python sync_agents.py --platform cursor
 
-# Antigravity only
-python sync_agents.py --platform antigravity
-```
-
-### Sync FROM Other Platforms
-
-Import skills from other platforms to Claude Code:
-
-```bash
-# From Gemini CLI
-python sync_agents.py --from gemini
-
-# From Codex CLI
-python sync_agents.py --from codex
-```
-
-### Preview Changes (Dry Run)
-
-```bash
+# Preview changes without applying
 python sync_agents.py --all --dry-run
-```
 
-### List Available Components
-
-```bash
+# List all components
 python sync_agents.py --list
-```
 
-### Verbose Output
-
-```bash
+# Verbose output
 python sync_agents.py --all --verbose
 ```
+
+### Available Flags
+
+| Flag | Description |
+|------|-------------|
+| (none) | Launch interactive menu |
+| `--all, -a` | Sync to all platforms |
+| `--platform, -p` | Sync to specific platform |
+| `--list, -l` | List all components |
+| `--dry-run, -n` | Preview changes |
+| `--verbose, -v` | Verbose output |
+| `--interactive, -i` | Force interactive mode |
 
 ## Supported Platforms
 

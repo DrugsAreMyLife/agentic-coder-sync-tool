@@ -343,16 +343,16 @@ class AgentSync:
         self.mcp_config: dict = {}
 
     def log(self, msg: str, level: str = "info"):
-        """Print log message with appropriate formatting."""
+        """Print log message with appropriate formatting (no emojis)."""
         prefix = {
-            "info": "ℹ️ ",
-            "success": "✅",
-            "warning": "⚠️ ",
-            "error": "❌",
-            "dry": "🔍",
-            "sync": "🔄",
-            "platform": "🎯"
-        }.get(level, "  ")
+            "info": "[*]",
+            "success": "[+]",
+            "warning": "[!]",
+            "error": "[-]",
+            "dry": "[?]",
+            "sync": "[~]",
+            "platform": "[>]"
+        }.get(level, "   ")
         print(f"{prefix} {msg}")
 
     # =========================================================================
@@ -1216,62 +1216,64 @@ web_search_request = true
             self.sync_log_path.write_text(json.dumps(state, indent=2))
 
     def list_components(self):
-        """List all components that would be synced."""
+        """List all components that would be synced (no emojis)."""
         self.load_all_claude()
 
         print("\n" + "=" * 60)
-        print("📦 CLAUDE CODE COMPONENTS")
+        print("  CLAUDE CODE COMPONENTS")
         print("=" * 60)
 
-        print(f"\n🤖 Agents ({len(self.agents)}):")
+        print(f"\n  Agents ({len(self.agents)}):")
         for agent in sorted(self.agents, key=lambda a: a.name):
-            print(f"   • {agent.name}: {str(agent.description)[:50]}...")
+            desc = str(agent.description)[:50] if agent.description else ""
+            print(f"   * {agent.name}: {desc}...")
 
-        print(f"\n🛠️  Skills ({len(self.skills)}):")
+        print(f"\n  Skills ({len(self.skills)}):")
         for skill in sorted(self.skills, key=lambda s: s.name):
             extras = []
             if skill.has_scripts: extras.append("scripts")
             if skill.has_references: extras.append("refs")
             if skill.has_assets: extras.append("assets")
             extra_str = f" [{', '.join(extras)}]" if extras else ""
-            print(f"   • {skill.name}{extra_str}")
+            print(f"   * {skill.name}{extra_str}")
 
-        print(f"\n⚡ Commands ({len(self.commands)}):")
+        print(f"\n  Commands ({len(self.commands)}):")
         for cmd in sorted(self.commands, key=lambda c: c.name):
-            print(f"   • /{cmd.name}: {cmd.description[:40]}...")
+            desc = cmd.description[:40] if cmd.description else ""
+            print(f"   * /{cmd.name}: {desc}...")
 
-        print(f"\n🪝 Hooks ({len(self.hooks)}):")
+        print(f"\n  Hooks ({len(self.hooks)}):")
         for hook in self.hooks[:5]:
-            print(f"   • {hook.event}[{hook.matcher}]")
+            print(f"   * {hook.event}[{hook.matcher}]")
         if len(self.hooks) > 5:
             print(f"   ... and {len(self.hooks) - 5} more")
 
-        print(f"\n🔌 Plugins ({len(self.plugins)}):")
+        print(f"\n  Plugins ({len(self.plugins)}):")
         for plugin in sorted(self.plugins, key=lambda p: p.name):
-            print(f"   • {plugin.name} v{plugin.version}")
+            print(f"   * {plugin.name} v{plugin.version}")
 
-        print(f"\n🔗 MCP Servers ({len(self.mcp_config)}):")
+        print(f"\n  MCP Servers ({len(self.mcp_config)}):")
         for name in list(self.mcp_config.keys())[:5]:
-            print(f"   • {name}")
+            print(f"   * {name}")
         if len(self.mcp_config) > 5:
             print(f"   ... and {len(self.mcp_config) - 5} more")
 
         print("\n" + "=" * 60)
-        print("🎯 TARGET PLATFORMS")
+        print("  TARGET PLATFORMS")
         print("=" * 60)
         print("""
-   ✅ Gemini CLI      ~/.gemini/skills/
-   ✅ Antigravity     ~/.gemini/antigravity/skills/
-   ✅ Codex CLI       ~/.codex/skills/
-   ✅ OpenCode        ~/.opencode/skills/
-   ✅ Trae            ~/.trae/skills/
-   ✅ Continue        ~/.continue/skills/
-   ✅ Cursor          ~/.cursor/commands/, ~/.cursor/rules/
-   ✅ Windsurf        ~/.windsurf/workflows/
-   ✅ Roo Code        ~/.roo/commands/, ~/.roo/rules/
-   ✅ Kiro            ~/.kiro/steering/
-   ✅ GitHub Copilot  ~/.github/prompts/
-   ✅ Aider           ./CONVENTIONS.md
+   [+] Gemini CLI      ~/.gemini/skills/
+   [+] Antigravity     ~/.gemini/antigravity/skills/
+   [+] Codex CLI       ~/.codex/skills/
+   [+] OpenCode        ~/.opencode/skills/
+   [+] Trae            ~/.trae/skills/
+   [+] Continue        ~/.continue/skills/
+   [+] Cursor          ~/.cursor/commands/, ~/.cursor/rules/
+   [+] Windsurf        ~/.windsurf/workflows/
+   [+] Roo Code        ~/.roo/commands/, ~/.roo/rules/
+   [+] Kiro            ~/.kiro/steering/
+   [+] GitHub Copilot  ~/.github/prompts/
+   [+] Aider           ./CONVENTIONS.md
 """)
 
 
@@ -1281,17 +1283,23 @@ web_search_request = true
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync Claude Code configs across all AI coding agent platforms",
+        description="Agent Management & Sync Suite - Manage and sync Claude Code agents across platforms",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Modes:
+  No arguments           Launch interactive menu (recommended)
+  --all / -a             Sync to all platforms
+  --platform / -p        Sync to specific platform
+  --list / -l            List all syncable components
+
 Supported Platforms:
   gemini, antigravity, codex, opencode, trae, continue,
   cursor, windsurf, roocode, kiro, copilot, aider
 
 Examples:
+  %(prog)s                          Launch interactive menu
   %(prog)s --all                    Sync to all platforms
   %(prog)s --platform gemini        Sync only to Gemini CLI
-  %(prog)s --platform cursor        Sync only to Cursor
   %(prog)s --list                   List all syncable components
   %(prog)s --dry-run --all          Preview sync without changes
         """
@@ -1302,16 +1310,28 @@ Examples:
     parser.add_argument("--list", "-l", action="store_true", help="List components")
     parser.add_argument("--dry-run", "-n", action="store_true", help="Preview changes")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--interactive", "-i", action="store_true", help="Force interactive mode")
 
     args = parser.parse_args()
     syncer = AgentSync(dry_run=args.dry_run, verbose=args.verbose)
 
+    # Determine mode
     if args.list:
         syncer.list_components()
     elif args.all:
         syncer.sync_all()
     elif args.platform:
         syncer.sync_platform(args.platform)
+    elif args.interactive or not any([args.all, args.platform, args.list]):
+        # Launch interactive menu when no arguments provided
+        try:
+            from menu.main_menu import MainMenu
+            menu = MainMenu(syncer)
+            menu.run()
+        except ImportError:
+            # Fallback if menu module not found
+            print("Interactive menu not available. Use --help for options.")
+            parser.print_help()
     else:
         parser.print_help()
 
