@@ -1620,6 +1620,103 @@ web_search_request = true
 
 
 # =============================================================================
+# Compatibility Check Functions
+# =============================================================================
+
+def _run_compat_check(syncer, mode: str, platform: str = None) -> None:
+    """Run compatibility check in specified mode."""
+    try:
+        from utils.platform_registry import get_registry
+        from utils.version_tracker import VersionTracker
+        from utils.compat_validator import CompatibilityValidator
+        from utils.web_monitor import WebMonitor
+        from utils.doc_updater import DocUpdater
+
+        registry = get_registry()
+        tracker = VersionTracker()
+        validator = CompatibilityValidator()
+
+        if mode == "check":
+            print("[*] Running quick compatibility check...")
+            results = tracker.check_all(registry)
+            summary = tracker.get_summary()
+
+            print(f"\n[+] Platforms: {summary['total']} tracked")
+            print(f"    Healthy: {summary['healthy']} | Warning: {summary['warning']} | Error: {summary['error']}")
+
+            if summary['pending_alerts'] > 0:
+                print(f"\n[!] {summary['pending_alerts']} pending alerts")
+
+            print("\nPlatform Status:")
+            for pid, pv in sorted(results.items()):
+                config = registry.get(pid)
+                name = config.name if config else pid
+                status = pv.health.status
+                version = pv.version_detected or "-"
+                print(f"  {name:<20} {status:<10} {version}")
+
+        elif mode == "validate":
+            print("[*] Running full validation...")
+            source_result = validator.validate_source(syncer)
+
+            print(f"\nSource (Claude Code): {'VALID' if source_result.valid else 'ISSUES'}")
+            for error in source_result.errors:
+                print(f"  [-] ERROR: {error}")
+            for warning in source_result.warnings:
+                print(f"  [!] WARN: {warning}")
+            for info in source_result.info[:5]:
+                print(f"  [*] {info}")
+
+            platforms_to_check = [platform] if platform else list(registry.all().keys())[:6]
+            for pid in platforms_to_check:
+                config = registry.get(pid)
+                if not config:
+                    continue
+                result = validator.dry_run_sync(syncer, pid, config)
+                status = "READY" if result.valid else "ISSUES"
+                print(f"\n{config.name}: {status}")
+                for error in result.errors[:2]:
+                    print(f"  [-] {error}")
+                for warning in result.warnings[:2]:
+                    print(f"  [!] {warning}")
+
+        elif mode == "monitor":
+            print("[*] Checking documentation for changes...")
+            monitor = WebMonitor()
+            results = monitor.check_all_platforms(registry)
+            summary = monitor.generate_summary()
+
+            print(f"\n[+] Monitored: {summary['total_monitored']} pages")
+            print(f"    OK: {summary['successful_checks']} | Failed: {summary['failed_checks']}")
+
+            if summary['changes_last_7_days'] > 0:
+                print(f"\n[!] Changes in last 7 days: {summary['changes_last_7_days']}")
+                for change in monitor.get_recent_changes(7)[:5]:
+                    print(f"    - {change.platform_id}: {change.change_type}")
+
+        elif mode == "update-docs":
+            print("[*] Updating documentation...")
+            doc_updater = DocUpdater()
+            doc_updater.update_feature_matrix(registry, {})
+            print("[+] Updated docs/platform-feature-matrix.md")
+
+            doc_updater.append_compatibility_log({
+                "type": "info",
+                "platform": "all",
+                "message": "Feature matrix regenerated via CLI",
+            })
+            print("[+] Updated docs/compatibility-log.md")
+
+        elif mode == "fix":
+            print("[*] Auto-fix not yet implemented")
+            print("    Run with --compat validate to see issues")
+
+    except ImportError as e:
+        print(f"[-] Compatibility modules not available: {e}")
+        print("    Make sure utils/platform_registry.py and related modules exist")
+
+
+# =============================================================================
 # CLI Entry Point
 # =============================================================================
 
@@ -1669,12 +1766,19 @@ Examples:
                         help="Skip backup when importing (default: create backup)")
     parser.add_argument("--no-plugins", action="store_true",
                         help="Exclude plugins from export (smaller bundle)")
+    parser.add_argument("--compat", nargs="?", const="check",
+                        choices=["check", "validate", "monitor", "update-docs", "fix"],
+                        help="Compatibility: check|validate|monitor|update-docs|fix")
+    parser.add_argument("--respect-exclusions", action="store_true",
+                        help="Apply exclusion rules during sync/export")
 
     args = parser.parse_args()
     syncer = AgentSync(dry_run=args.dry_run, verbose=args.verbose)
 
     # Determine mode
-    if args.export:
+    if args.compat:
+        _run_compat_check(syncer, args.compat, args.platform)
+    elif args.export:
         output_path = None if args.export is True else Path(args.export)
         syncer.export_bundle(output_path, include_plugins=not args.no_plugins)
     elif args.import_file:
@@ -1689,7 +1793,7 @@ Examples:
         syncer.sync_all()
     elif args.platform:
         syncer.sync_platform(args.platform)
-    elif args.interactive or not any([args.all, args.platform, args.list, args.export, args.import_file]):
+    elif args.interactive or not any([args.all, args.platform, args.list, args.export, args.import_file, args.compat]):
         # Launch interactive menu when no arguments provided
         try:
             from menu.main_menu import MainMenu

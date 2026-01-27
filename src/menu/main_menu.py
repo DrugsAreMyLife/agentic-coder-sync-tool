@@ -46,10 +46,19 @@ class MainMenu(BaseMenu):
                 from .sync_menu import SyncMenu
                 SyncMenu(self.syncer).run()
             elif choice == '7':
-                self._show_platform_status()
+                from .workflow_menu import WorkflowMenu
+                WorkflowMenu(self.syncer).run()
             elif choice == '8':
+                from .exclusion_menu import ExclusionMenu
+                ExclusionMenu(self.syncer).run()
+            elif choice.lower() == 'c':
+                from .compat_menu import CompatMenu
+                CompatMenu(self.syncer).run()
+            elif choice.lower() == 'p':
+                self._show_platform_status()
+            elif choice.lower() == 'e':
                 self._export_bundle()
-            elif choice == '9':
+            elif choice.lower() == 'i':
                 self._import_bundle()
             elif choice in ('0', 'q', 'quit', 'exit'):
                 return None
@@ -76,24 +85,27 @@ class MainMenu(BaseMenu):
         print(summary)
         print()
 
-        # Main options
+        # Component browsers
+        self.draw_section("Component Browsers:")
         self.draw_option("1", "Agent Manager", f"Browse, edit, and analyze {agent_count} agents")
-        print()
-        self.draw_option("2", "Skill Browser & Builder", f"Manage {skill_count} skills")
-        print()
-        self.draw_option("3", "Plugin Browser & Builder", f"Explore {plugin_count} plugins")
-        print()
-        self.draw_option("4", "Command Browser & Builder", f"View {command_count} commands")
-        print()
-        self.draw_option("5", "Hook Browser & Builder", f"Configure {hook_count} hooks")
-        print()
+        self.draw_option("2", "Skill Browser", f"Manage {skill_count} skills")
+        self.draw_option("3", "Plugin Browser", f"Explore {plugin_count} plugins")
+        self.draw_option("4", "Command Browser", f"View {command_count} commands")
+        self.draw_option("5", "Hook Browser", f"Configure {hook_count} hooks")
+
+        # Orchestration & Sync
+        self.draw_section("Orchestration & Sync:")
         self.draw_option("6", "Sync to Platforms", "Export to other AI coding tools")
-        print()
-        self.draw_option("7", "Platform Status", "Check installation status")
-        print()
-        self.draw_option("8", "Export Bundle", "Create portable config archive")
-        print()
-        self.draw_option("9", "Import Bundle", "Restore config from archive")
+        self.draw_option("7", "Workflow Designer", "Design agent handoff workflows")
+        self.draw_option("8", "Exclusion Manager", "Mark private/excluded components")
+
+        # Utilities
+        self.draw_section("Utilities:")
+        self.draw_option("C", "Compatibility Check", "Validate platform compatibility")
+        self.draw_option("P", "Platform Status", "Check installation status")
+        self.draw_option("E", "Export Bundle", "Create portable config archive")
+        self.draw_option("I", "Import Bundle", "Restore config from archive")
+
         print()
         self.draw_option("0", "Exit")
 

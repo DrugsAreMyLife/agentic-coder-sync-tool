@@ -42,3 +42,15 @@ def get_hook_browser():
 def get_sync_menu():
     from menu.sync_menu import SyncMenu
     return SyncMenu
+
+def get_compat_menu():
+    from menu.compat_menu import CompatMenu
+    return CompatMenu
+
+def get_exclusion_menu():
+    from menu.exclusion_menu import ExclusionMenu
+    return ExclusionMenu
+
+def get_workflow_menu():
+    from menu.workflow_menu import WorkflowMenu
+    return WorkflowMenu
