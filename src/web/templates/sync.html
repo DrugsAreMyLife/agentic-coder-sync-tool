@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Sync - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / Sync
+</div>
+
+<h1>Platform Sync</h1>
+<p>Sync {{ agent_count }} agents and {{ skill_count }} skills to other platforms</p>
+
+{% if request.query_params.get('synced') %}
+<article style="background: #22c55e22; border-left: 3px solid #22c55e;">
+    <p>Sync completed successfully!</p>
+</article>
+{% endif %}
+
+<form method="post" action="/sync/run">
+    <h2>Compatible Platforms</h2>
+    <p>These platforms support SKILL.md format directly:</p>
+
+    <div class="platform-grid">
+        {% for p in platforms if p.type == 'compatible' %}
+        <label class="platform-card {% if p.installed %}installed{% else %}not-installed{% endif %}">
+            <input type="checkbox" name="platforms" value="{{ p.name }}" {% if not p.installed %}disabled{% endif %}>
+            <div>
+                <strong>{{ p.name }}</strong>
+                <br>
+                <small>{% if p.installed %}Installed{% else %}Not installed{% endif %}</small>
+            </div>
+        </label>
+        {% endfor %}
+    </div>
+
+    <h2 style="margin-top: 2rem;">Conversion Required</h2>
+    <p>These platforms require format conversion:</p>
+
+    <div class="platform-grid">
+        {% for p in platforms if p.type == 'conversion' %}
+        <label class="platform-card {% if p.installed %}installed{% else %}not-installed{% endif %}">
+            <input type="checkbox" name="platforms" value="{{ p.name }}" {% if not p.installed %}disabled{% endif %}>
+            <div>
+                <strong>{{ p.name }}</strong>
+                <br>
+                <small>{% if p.installed %}Installed{% else %}Not installed{% endif %}</small>
+            </div>
+        </label>
+        {% endfor %}
+    </div>
+
+    <div style="margin-top: 2rem;">
+        <button type="submit">Sync Selected Platforms</button>
+    </div>
+</form>
+
+<article style="margin-top: 2rem;">
+    <header>
+        <h3>What Gets Synced</h3>
+    </header>
+    <ul>
+        <li><strong>Agents:</strong> Agent definitions with tools, model, and instructions</li>
+        <li><strong>Skills:</strong> SKILL.md files with descriptions and content</li>
+        <li><strong>Exclusions:</strong> Components marked as excluded will be skipped</li>
+    </ul>
+    <p><small>Sync creates copies in target platform directories. Original Claude Code files are never modified.</small></p>
+</article>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Hooks - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / Hooks
+</div>
+
+<h1>Hooks</h1>
+<p>{{ total }} hooks loaded from Claude Code</p>
+
+{% if hooks_by_event %}
+    {% for event, hooks in hooks_by_event.items() %}
+    <article>
+        <header>
+            <h3>{{ event }}</h3>
+        </header>
+        <ul class="item-list">
+            {% for hook in hooks %}
+            <li>
+                <div>
+                    <div class="item-name">
+                        {% if hook.matcher %}
+                        {{ hook.matcher }}
+                        {% else %}
+                        (all)
+                        {% endif %}
+                    </div>
+                    <div class="item-desc">
+                        <code>{{ hook.command[:60] }}{% if hook.command|length > 60 %}...{% endif %}</code>
+                    </div>
+                </div>
+                <div class="item-meta">
+                    <span class="badge badge-info">{{ hook.source_path.name if hook.source_path else "settings" }}</span>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </article>
+    {% endfor %}
+{% else %}
+<div class="empty-state">
+    <p>No hooks configured.</p>
+</div>
+{% endif %}
+{% endblock %}

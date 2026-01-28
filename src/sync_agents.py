@@ -1727,6 +1727,7 @@ def main():
         epilog="""
 Modes:
   No arguments           Launch interactive menu (recommended)
+  --web / -w             Launch web UI (browser-based interface)
   --all / -a             Sync to all platforms
   --platform / -p        Sync to specific platform
   --list / -l            List all syncable components
@@ -1739,6 +1740,8 @@ Supported Platforms:
 
 Examples:
   %(prog)s                          Launch interactive menu
+  %(prog)s --web                    Launch web UI on port 8000
+  %(prog)s --web 9000               Launch web UI on port 9000
   %(prog)s --all                    Sync to all platforms
   %(prog)s --platform gemini        Sync only to Gemini CLI
   %(prog)s --list                   List all syncable components
@@ -1771,12 +1774,23 @@ Examples:
                         help="Compatibility: check|validate|monitor|update-docs|fix")
     parser.add_argument("--respect-exclusions", action="store_true",
                         help="Apply exclusion rules during sync/export")
+    parser.add_argument("--web", "-w", nargs="?", const=8000, type=int, metavar="PORT",
+                        help="Launch web UI (default port: 8000)")
+    parser.add_argument("--no-browser", action="store_true",
+                        help="Don't auto-open browser when starting web UI")
 
     args = parser.parse_args()
     syncer = AgentSync(dry_run=args.dry_run, verbose=args.verbose)
 
     # Determine mode
-    if args.compat:
+    if args.web:
+        try:
+            from web.server import run_server
+            run_server(port=args.web, open_browser=not args.no_browser)
+        except ImportError as e:
+            print(f"[-] Web UI not available: {e}")
+            print("    Install dependencies: pip install fastapi uvicorn jinja2")
+    elif args.compat:
         _run_compat_check(syncer, args.compat, args.platform)
     elif args.export:
         output_path = None if args.export is True else Path(args.export)

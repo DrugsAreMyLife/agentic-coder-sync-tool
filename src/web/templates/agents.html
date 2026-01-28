@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Agents - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / Agents
+</div>
+
+<h1>Agents</h1>
+<p>{{ total }} agents loaded from Claude Code</p>
+
+<form class="search-form" method="get" action="/agents">
+    <input type="search" name="search" placeholder="Search agents..." value="{{ search }}">
+    <button type="submit">Search</button>
+    {% if search %}
+    <a href="/agents" role="button" class="secondary">Clear</a>
+    {% endif %}
+</form>
+
+{% if agents %}
+<ul class="item-list">
+    {% for item in agents %}
+    <li>
+        <a href="/agents/{{ item.agent.name }}" style="text-decoration: none; color: inherit; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div>
+                <div class="item-name">{{ item.agent.name }}</div>
+                <div class="item-desc">{{ item.agent.description[:80] }}{% if item.agent.description|length > 80 %}...{% endif %}</div>
+            </div>
+            <div class="item-meta">
+                {% if item.excluded %}
+                    {% if item.explicit %}
+                    <span class="badge badge-excluded">Excluded</span>
+                    {% else %}
+                    <span class="badge badge-excluded">Pattern Match</span>
+                    {% endif %}
+                {% else %}
+                <span class="badge badge-included">Included</span>
+                {% endif %}
+            </div>
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">
+    <p>No agents found{% if search %} matching "{{ search }}"{% endif %}.</p>
+</div>
+{% endif %}
+{% endblock %}

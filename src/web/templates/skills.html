@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Skills - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / Skills
+</div>
+
+<h1>Skills</h1>
+<p>{{ total }} skills loaded from Claude Code</p>
+
+<form class="search-form" method="get" action="/skills">
+    <input type="search" name="search" placeholder="Search skills..." value="{{ search }}">
+    <button type="submit">Search</button>
+    {% if search %}
+    <a href="/skills" role="button" class="secondary">Clear</a>
+    {% endif %}
+</form>
+
+{% if skills %}
+<ul class="item-list">
+    {% for item in skills %}
+    <li>
+        <a href="/skills/{{ item.skill.name }}" style="text-decoration: none; color: inherit; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div>
+                <div class="item-name">{{ item.skill.name }}</div>
+                <div class="item-desc">{{ item.skill.description[:80] if item.skill.description else "No description" }}{% if item.skill.description and item.skill.description|length > 80 %}...{% endif %}</div>
+            </div>
+            <div class="item-meta">
+                {% if item.excluded %}
+                <span class="badge badge-excluded">Excluded</span>
+                {% else %}
+                <span class="badge badge-included">Included</span>
+                {% endif %}
+            </div>
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">
+    <p>No skills found{% if search %} matching "{{ search }}"{% endif %}.</p>
+</div>
+{% endif %}
+{% endblock %}

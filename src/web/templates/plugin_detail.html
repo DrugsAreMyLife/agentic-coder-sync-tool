@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}{{ plugin.name }} - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / <a href="/plugins">Plugins</a> / {{ plugin.name }}
+</div>
+
+<h1>{{ plugin.name }}</h1>
+
+<div class="actions" style="margin-bottom: 1.5rem;">
+    <form method="post" action="/plugins/{{ plugin.name }}/toggle-exclusion" style="display: inline;">
+        {% if excluded %}
+        <button type="submit" class="outline">Include in Export</button>
+        {% else %}
+        <button type="submit" class="secondary">Exclude from Export</button>
+        {% endif %}
+    </form>
+</div>
+
+<div class="detail-section">
+    <h3>Export Status</h3>
+    {% if excluded %}
+    <p><span class="badge badge-excluded">Excluded</span> Will not be included in sync/export</p>
+    {% else %}
+    <p><span class="badge badge-included">Included</span> Will be included in sync/export</p>
+    {% endif %}
+</div>
+
+<div class="detail-section">
+    <h3>Source Directory</h3>
+    <code>{{ plugin.source_path }}</code>
+</div>
+
+<div class="grid">
+    {% if commands %}
+    <article>
+        <header>
+            <h3>Commands ({{ commands|length }})</h3>
+        </header>
+        <ul class="item-list">
+            {% for cmd in commands %}
+            <li>
+                <span class="item-name">/{{ cmd.name }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </article>
+    {% endif %}
+
+    {% if agents %}
+    <article>
+        <header>
+            <h3>Agents ({{ agents|length }})</h3>
+        </header>
+        <ul class="item-list">
+            {% for agent in agents %}
+            <li>
+                <span class="item-name">{{ agent.name }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </article>
+    {% endif %}
+
+    {% if skills %}
+    <article>
+        <header>
+            <h3>Skills ({{ skills|length }})</h3>
+        </header>
+        <ul class="item-list">
+            {% for skill in skills %}
+            <li>
+                <span class="item-name">{{ skill.name }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </article>
+    {% endif %}
+</div>
+
+{% if not commands and not agents and not skills %}
+<div class="empty-state">
+    <p>This plugin has no browsable components.</p>
+</div>
+{% endif %}
+{% endblock %}

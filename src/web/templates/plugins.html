@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Plugins - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / Plugins
+</div>
+
+<h1>Plugins</h1>
+<p>{{ total }} plugins loaded from Claude Code</p>
+
+{% if plugins %}
+<ul class="item-list">
+    {% for item in plugins %}
+    <li>
+        <a href="/plugins/{{ item.plugin.name }}" style="text-decoration: none; color: inherit; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div>
+                <div class="item-name">{{ item.plugin.name }}</div>
+                <div class="item-desc">
+                    {% if item.cmd_count %}{{ item.cmd_count }} commands{% endif %}
+                    {% if item.agent_count %}{% if item.cmd_count %}, {% endif %}{{ item.agent_count }} agents{% endif %}
+                    {% if item.skill_count %}{% if item.cmd_count or item.agent_count %}, {% endif %}{{ item.skill_count }} skills{% endif %}
+                    {% if not item.cmd_count and not item.agent_count and not item.skill_count %}No components{% endif %}
+                </div>
+            </div>
+            <div class="item-meta">
+                {% if item.excluded %}
+                <span class="badge badge-excluded">Excluded</span>
+                {% else %}
+                <span class="badge badge-included">Included</span>
+                {% endif %}
+            </div>
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">
+    <p>No plugins found.</p>
+</div>
+{% endif %}
+{% endblock %}

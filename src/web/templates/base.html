@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Agent Management Suite{% endblock %}</title>
+
+    <!-- Pico CSS - Minimal CSS Framework -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+
+    <style>
+        :root {
+            --pico-font-size: 16px;
+        }
+
+        /* Navigation */
+        nav {
+            background: var(--pico-card-background-color);
+            padding: 1rem 2rem;
+            margin-bottom: 2rem;
+        }
+
+        nav ul {
+            margin: 0;
+        }
+
+        nav .brand {
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        /* Stats cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--pico-card-background-color);
+            padding: 1.5rem;
+            border-radius: var(--pico-border-radius);
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--pico-primary);
+        }
+
+        .stat-card .label {
+            color: var(--pico-muted-color);
+            font-size: 0.9rem;
+        }
+
+        /* List items */
+        .item-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .item-list li {
+            background: var(--pico-card-background-color);
+            padding: 1rem 1.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: var(--pico-border-radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .item-list li:hover {
+            background: var(--pico-card-sectioning-background-color);
+        }
+
+        .item-list .item-name {
+            font-weight: 600;
+        }
+
+        .item-list .item-desc {
+            color: var(--pico-muted-color);
+            font-size: 0.9rem;
+        }
+
+        .item-list .item-meta {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-excluded {
+            background: #ef4444;
+            color: white;
+        }
+
+        .badge-included {
+            background: #22c55e;
+            color: white;
+        }
+
+        .badge-info {
+            background: var(--pico-secondary-background);
+            color: var(--pico-secondary);
+        }
+
+        /* Detail sections */
+        .detail-section {
+            background: var(--pico-card-background-color);
+            padding: 1.5rem;
+            border-radius: var(--pico-border-radius);
+            margin-bottom: 1rem;
+        }
+
+        .detail-section h3 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            color: var(--pico-muted-color);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: var(--pico-code-background-color);
+            padding: 1rem;
+            border-radius: var(--pico-border-radius);
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Search form */
+        .search-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-form input {
+            flex: 1;
+        }
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* Platform grid */
+        .platform-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .platform-card {
+            background: var(--pico-card-background-color);
+            padding: 1rem;
+            border-radius: var(--pico-border-radius);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .platform-card.installed {
+            border-left: 3px solid #22c55e;
+        }
+
+        .platform-card.not-installed {
+            border-left: 3px solid var(--pico-muted-border-color);
+            opacity: 0.6;
+        }
+
+        .platform-card input[type="checkbox"] {
+            margin: 0;
+        }
+
+        /* Breadcrumb */
+        .breadcrumb {
+            margin-bottom: 1rem;
+            color: var(--pico-muted-color);
+        }
+
+        .breadcrumb a {
+            color: var(--pico-muted-color);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--pico-muted-color);
+        }
+
+        /* Tool tags */
+        .tool-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .tool-tag {
+            background: var(--pico-secondary-background);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/" class="brand">Agent Management Suite</a></li>
+        </ul>
+        <ul>
+            <li><a href="/agents">Agents</a></li>
+            <li><a href="/skills">Skills</a></li>
+            <li><a href="/plugins">Plugins</a></li>
+            <li><a href="/hooks">Hooks</a></li>
+            <li><a href="/sync">Sync</a></li>
+            <li><a href="/reload" role="button" class="outline secondary">Reload</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="container">
+        <small>Agent Management &amp; Sync Suite</small>
+    </footer>
+</body>
+</html>

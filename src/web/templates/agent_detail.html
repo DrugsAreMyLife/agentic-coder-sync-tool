@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ agent.name }} - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / <a href="/agents">Agents</a> / {{ agent.name }}
+</div>
+
+<h1>{{ agent.name }}</h1>
+
+<div class="actions" style="margin-bottom: 1.5rem;">
+    <form method="post" action="/agents/{{ agent.name }}/toggle-exclusion" style="display: inline;">
+        {% if excluded %}
+        <button type="submit" class="outline">Include in Export</button>
+        {% else %}
+        <button type="submit" class="secondary">Exclude from Export</button>
+        {% endif %}
+    </form>
+</div>
+
+<div class="grid">
+    <div>
+        <div class="detail-section">
+            <h3>Description</h3>
+            <p>{{ agent.description or "No description provided." }}</p>
+        </div>
+
+        <div class="detail-section">
+            <h3>Model</h3>
+            <p>{{ agent.model or "Default (inherited)" }}</p>
+        </div>
+
+        <div class="detail-section">
+            <h3>Export Status</h3>
+            {% if excluded %}
+                {% if explicit %}
+                <p><span class="badge badge-excluded">Excluded</span> Manually excluded from sync/export</p>
+                {% else %}
+                <p><span class="badge badge-excluded">Pattern Match</span> Matches exclusion pattern</p>
+                {% endif %}
+            {% else %}
+            <p><span class="badge badge-included">Included</span> Will be included in sync/export</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <div class="detail-section">
+            <h3>Authorized Tools</h3>
+            {% if agent.tools %}
+            <div class="tool-tags">
+                {% for tool in agent.tools %}
+                <span class="tool-tag">{{ tool }}</span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p>No tools specified (uses defaults)</p>
+            {% endif %}
+        </div>
+
+        <div class="detail-section">
+            <h3>Source File</h3>
+            <code>{{ agent.source_path }}</code>
+        </div>
+    </div>
+</div>
+
+{% if agent.content %}
+<div class="detail-section">
+    <h3>Agent Instructions</h3>
+    <div class="code-block">{{ agent.content }}</div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Agent Management Suite{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="stats-grid">
+    <a href="/agents" class="stat-card" style="text-decoration: none; color: inherit;">
+        <div class="number">{{ agent_count }}</div>
+        <div class="label">Agents</div>
+    </a>
+    <a href="/skills" class="stat-card" style="text-decoration: none; color: inherit;">
+        <div class="number">{{ skill_count }}</div>
+        <div class="label">Skills</div>
+    </a>
+    <a href="/plugins" class="stat-card" style="text-decoration: none; color: inherit;">
+        <div class="number">{{ plugin_count }}</div>
+        <div class="label">Plugins</div>
+    </a>
+    <a href="/hooks" class="stat-card" style="text-decoration: none; color: inherit;">
+        <div class="number">{{ hook_count }}</div>
+        <div class="label">Hooks</div>
+    </a>
+</div>
+
+<div class="grid">
+    <article>
+        <header>
+            <h3>Quick Actions</h3>
+        </header>
+        <div class="actions">
+            <a href="/agents" role="button">Browse Agents</a>
+            <a href="/skills" role="button" class="secondary">Browse Skills</a>
+            <a href="/plugins" role="button" class="secondary">Browse Plugins</a>
+            <a href="/sync" role="button" class="contrast">Sync to Platforms</a>
+        </div>
+    </article>
+
+    <article>
+        <header>
+            <h3>About</h3>
+        </header>
+        <p>
+            Manage and synchronize your Claude Code agents, skills, plugins, commands, and hooks
+            across multiple AI coding platforms.
+        </p>
+        <p>
+            <strong>Supported platforms:</strong> Codex CLI, Gemini CLI, Cursor, Windsurf, Continue, and more.
+        </p>
+    </article>
+</div>
+{% endblock %}

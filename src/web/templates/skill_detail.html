@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ skill.name }} - Agent Management Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/">Dashboard</a> / <a href="/skills">Skills</a> / {{ skill.name }}
+</div>
+
+<h1>{{ skill.name }}</h1>
+
+<div class="actions" style="margin-bottom: 1.5rem;">
+    <form method="post" action="/skills/{{ skill.name }}/toggle-exclusion" style="display: inline;">
+        {% if excluded %}
+        <button type="submit" class="outline">Include in Export</button>
+        {% else %}
+        <button type="submit" class="secondary">Exclude from Export</button>
+        {% endif %}
+    </form>
+</div>
+
+<div class="grid">
+    <div>
+        <div class="detail-section">
+            <h3>Description</h3>
+            <p>{{ skill.description or "No description provided." }}</p>
+        </div>
+
+        <div class="detail-section">
+            <h3>Export Status</h3>
+            {% if excluded %}
+            <p><span class="badge badge-excluded">Excluded</span> Will not be included in sync/export</p>
+            {% else %}
+            <p><span class="badge badge-included">Included</span> Will be included in sync/export</p>
+            {% endif %}
+        </div>
+
+        <div class="detail-section">
+            <h3>Source Directory</h3>
+            <code>{{ skill.source_path }}</code>
+        </div>
+    </div>
+</div>
+
+{% if content %}
+<div class="detail-section">
+    <h3>SKILL.md Content</h3>
+    <div class="code-block">{{ content }}</div>
+</div>
+{% endif %}
+{% endblock %}
