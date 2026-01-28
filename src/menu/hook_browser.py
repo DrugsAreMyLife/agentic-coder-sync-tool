@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from menu.base import BaseMenu
 from utils.formatters import truncate
+from utils.exclusion_manager import ExclusionManager
 
 
 class HookBrowser(BaseMenu):
@@ -21,6 +22,7 @@ class HookBrowser(BaseMenu):
         super().__init__()
         self.syncer = syncer
         self.hooks = syncer.hooks
+        self.exclusion_manager = ExclusionManager()
 
     def run(self) -> Optional[str]:
         """Run the hook browser loop."""
@@ -115,12 +117,40 @@ class HookBrowser(BaseMenu):
             self.draw_section("SOURCE")
             print(f"  {hook.source_path}")
 
+        # Export/Sync Exclusion Status
+        # Use a unique identifier for hooks (event:matcher)
+        hook_id = f"{hook.event}:{hook.matcher}"
+        self.draw_section("EXPORT STATUS")
+        exclusion_status = self.exclusion_manager.get_exclusion_status("hook", hook_id)
+        if exclusion_status["is_excluded"]:
+            rule = exclusion_status["matched_rule"]
+            if exclusion_status["is_explicit"]:
+                print(f"  {c.colorize('[EXCLUDED]', c.RED, c.BOLD)} Manually excluded from sync/export")
+            else:
+                print(f"  {c.colorize('[EXCLUDED]', c.YELLOW)} Matches pattern: {rule.pattern}")
+                print(f"  {c.colorize(f'Reason: {rule.reason}', c.DIM)}")
+        else:
+            print(f"  {c.colorize('[INCLUDED]', c.GREEN)} Will be included in sync/export")
+
         print()
-        print(f"  {c.colorize('[d] Disable', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
+        print(f"  {c.colorize('[d] Disable', c.DIM)}  {c.colorize('[x] Toggle Exclusion', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
 
         choice = self.prompt()
         if choice.lower() == 'd':
             self._disable_hook(hook)
+        elif choice.lower() == 'x':
+            self._toggle_exclusion(hook)
+
+    def _toggle_exclusion(self, hook) -> None:
+        """Toggle export/sync exclusion for a hook."""
+        # Use a unique identifier for hooks (event:matcher)
+        hook_id = f"{hook.event}:{hook.matcher}"
+        is_excluded, message = self.exclusion_manager.toggle_exclusion("hook", hook_id)
+
+        if is_excluded:
+            self.print_info(f"Hook '{hook.event}:{hook.matcher}' is now EXCLUDED from sync/export")
+        else:
+            self.print_success(f"Hook '{hook.event}:{hook.matcher}' is now INCLUDED in sync/export")
 
     def _disable_hook(self, hook) -> None:
         """Disable a hook (remove from settings)."""

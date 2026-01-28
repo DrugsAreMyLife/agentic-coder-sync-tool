@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from menu.base import BaseMenu
 from utils.formatters import format_description, format_tools_list
+from utils.exclusion_manager import ExclusionManager
 
 
 class CommandBrowser(BaseMenu):
@@ -20,6 +21,7 @@ class CommandBrowser(BaseMenu):
         super().__init__()
         self.syncer = syncer
         self.commands = syncer.commands
+        self.exclusion_manager = ExclusionManager()
         self._load_plugin_commands()
 
     def _load_plugin_commands(self) -> None:
@@ -129,13 +131,30 @@ class CommandBrowser(BaseMenu):
 
             self.draw_section("PATH")
             print(f"  {cmd.source_path}")
+
+            # Export/Sync Exclusion Status for user commands
+            self.draw_section("EXPORT STATUS")
+            exclusion_status = self.exclusion_manager.get_exclusion_status("command", cmd.name)
+            if exclusion_status["is_excluded"]:
+                rule = exclusion_status["matched_rule"]
+                if exclusion_status["is_explicit"]:
+                    print(f"  {c.colorize('[EXCLUDED]', c.RED, c.BOLD)} Manually excluded from sync/export")
+                else:
+                    print(f"  {c.colorize('[EXCLUDED]', c.YELLOW)} Matches pattern: {rule.pattern}")
+                    print(f"  {c.colorize(f'Reason: {rule.reason}', c.DIM)}")
+            else:
+                print(f"  {c.colorize('[INCLUDED]', c.GREEN)} Will be included in sync/export")
         else:
             self.print_error("Invalid selection")
             self.wait_for_key()
             return
 
         print()
-        print(f"  {c.colorize('[e] Edit', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
+        # Show toggle option only for user commands (not plugin commands)
+        if idx > total_plugin:
+            print(f"  {c.colorize('[e] Edit', c.DIM)}  {c.colorize('[x] Toggle Exclusion', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
+        else:
+            print(f"  {c.colorize('[e] Edit', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
 
         choice = self.prompt()
         if choice.lower() == 'e':
@@ -146,6 +165,18 @@ class CommandBrowser(BaseMenu):
                 subprocess.run(["code", str(self.commands[idx - total_plugin - 1].source_path)], check=False)
             self.print_success("Opened in editor")
             self.wait_for_key()
+        elif choice.lower() == 'x' and idx > total_plugin:
+            cmd = self.commands[idx - total_plugin - 1]
+            self._toggle_exclusion(cmd)
+
+    def _toggle_exclusion(self, cmd) -> None:
+        """Toggle export/sync exclusion for a command."""
+        is_excluded, message = self.exclusion_manager.toggle_exclusion("command", cmd.name)
+
+        if is_excluded:
+            self.print_info(f"Command '/{cmd.name}' is now EXCLUDED from sync/export")
+        else:
+            self.print_success(f"Command '/{cmd.name}' is now INCLUDED in sync/export")
 
     def _create_command(self) -> None:
         """Create a new command interactively."""

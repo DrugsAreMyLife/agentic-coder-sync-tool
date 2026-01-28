@@ -13,6 +13,7 @@ from menu.base import BaseMenu
 from utils.relationships import RelationshipAnalyzer
 from utils.suggestions import SuggestionEngine
 from utils.formatters import format_description, format_tools_list, format_model
+from utils.exclusion_manager import ExclusionManager
 
 
 class AgentManager(BaseMenu):
@@ -24,6 +25,7 @@ class AgentManager(BaseMenu):
         self.agents = syncer.agents
         self.analyzer = RelationshipAnalyzer(self.agents)
         self.suggestion_engine = SuggestionEngine()
+        self.exclusion_manager = ExclusionManager()
         self.page_size = 10
         self.current_page = 0
         self.search_query = ""
@@ -215,8 +217,21 @@ class AgentManager(BaseMenu):
             else:
                 print(f"  {c.colorize('No suggestions available', c.DIM)}")
 
+            # Export/Sync Status
+            self.draw_section("EXPORT STATUS")
+            exclusion_status = self.exclusion_manager.get_exclusion_status("agent", agent.name)
+            if exclusion_status["is_excluded"]:
+                rule = exclusion_status["matched_rule"]
+                if exclusion_status["is_explicit"]:
+                    print(f"  {c.colorize('[EXCLUDED]', c.RED, c.BOLD)} Manually excluded from sync/export")
+                else:
+                    print(f"  {c.colorize('[EXCLUDED]', c.YELLOW)} Matches pattern: {rule.pattern}")
+                    print(f"  {c.colorize(f'Reason: {rule.reason}', c.DIM)}")
+            else:
+                print(f"  {c.colorize('[INCLUDED]', c.GREEN)} Will be included in sync/export")
+
             print()
-            print(f"  {c.colorize('[e] Edit', c.DIM)}  {c.colorize('[d] Duplicate', c.DIM)}  {c.colorize('[r] Relationships', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
+            print(f"  {c.colorize('[e] Edit', c.DIM)}  {c.colorize('[d] Duplicate', c.DIM)}  {c.colorize('[r] Relationships', c.DIM)}  {c.colorize('[x] Toggle Exclusion', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
 
             choice = self.prompt()
 
@@ -228,6 +243,8 @@ class AgentManager(BaseMenu):
                 self._edit_agent(agent)
             elif choice.lower() == 'd':
                 self._duplicate_agent(agent)
+            elif choice.lower() == 'x':
+                self._toggle_exclusion(agent)
 
     def _show_relationships(self, agent) -> None:
         """Show relationship graph for an agent."""
@@ -290,6 +307,15 @@ class AgentManager(BaseMenu):
         self.analyzer = RelationshipAnalyzer(self.agents)
 
         self.wait_for_key()
+
+    def _toggle_exclusion(self, agent) -> None:
+        """Toggle export/sync exclusion for an agent."""
+        is_excluded, message = self.exclusion_manager.toggle_exclusion("agent", agent.name)
+
+        if is_excluded:
+            self.print_info(f"Agent '{agent.name}' is now EXCLUDED from sync/export")
+        else:
+            self.print_success(f"Agent '{agent.name}' is now INCLUDED in sync/export")
 
     def _create_agent(self) -> None:
         """Create a new agent interactively."""

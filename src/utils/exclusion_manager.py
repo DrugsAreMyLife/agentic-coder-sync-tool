@@ -279,3 +279,115 @@ class ExclusionManager:
             "export_only": sum(1 for r in self.rules if r.exclude_from_export and not r.exclude_from_sync),
             "both": sum(1 for r in self.rules if r.exclude_from_sync and r.exclude_from_export),
         }
+
+    # ========== Individual Component Exclusion Methods ==========
+
+    def is_explicitly_excluded(self, component_type: str, name: str) -> bool:
+        """
+        Check if a component has an explicit (exact-match) exclusion rule.
+        This differs from is_excluded() which also checks wildcard patterns.
+        """
+        for rule in self.rules:
+            if rule.component_type not in ("*", component_type):
+                continue
+            # Check for exact match (not wildcard)
+            if rule.pattern == name:
+                return True
+        return False
+
+    def get_explicit_exclusion(self, component_type: str, name: str) -> Optional[ExclusionRule]:
+        """Get the explicit exclusion rule for a specific component, if any."""
+        for rule in self.rules:
+            if rule.component_type not in ("*", component_type):
+                continue
+            if rule.pattern == name:
+                return rule
+        return None
+
+    def toggle_exclusion(self, component_type: str, name: str,
+                         exclude_sync: bool = True, exclude_export: bool = True) -> tuple[bool, str]:
+        """
+        Toggle exclusion for a specific component.
+
+        Returns:
+            Tuple of (is_now_excluded, message)
+        """
+        existing = self.get_explicit_exclusion(component_type, name)
+
+        if existing:
+            # Remove the exclusion
+            self.remove_rule(existing.id)
+            return (False, f"Removed exclusion for '{name}'")
+        else:
+            # Add new exclusion
+            self.add_rule(
+                component_type=component_type,
+                pattern=name,
+                reason=f"Manually excluded {component_type}",
+                exclude_sync=exclude_sync,
+                exclude_export=exclude_export,
+            )
+            return (True, f"Added exclusion for '{name}'")
+
+    def set_exclusion(self, component_type: str, name: str, excluded: bool,
+                      exclude_sync: bool = True, exclude_export: bool = True) -> str:
+        """
+        Explicitly set exclusion state for a component.
+
+        Returns:
+            Status message
+        """
+        existing = self.get_explicit_exclusion(component_type, name)
+
+        if excluded:
+            if existing:
+                return f"'{name}' is already excluded"
+            self.add_rule(
+                component_type=component_type,
+                pattern=name,
+                reason=f"Manually excluded {component_type}",
+                exclude_sync=exclude_sync,
+                exclude_export=exclude_export,
+            )
+            return f"Excluded '{name}' from sync/export"
+        else:
+            if existing:
+                self.remove_rule(existing.id)
+                return f"Removed exclusion for '{name}'"
+            return f"'{name}' was not explicitly excluded"
+
+    def get_exclusion_status(self, component_type: str, name: str) -> dict:
+        """
+        Get detailed exclusion status for a component.
+
+        Returns dict with:
+            - is_excluded: bool (overall exclusion state)
+            - is_explicit: bool (has exact-match rule)
+            - matched_rule: Optional[ExclusionRule] (the rule that caused exclusion)
+            - excluded_from_sync: bool
+            - excluded_from_export: bool
+        """
+        status = {
+            "is_excluded": False,
+            "is_explicit": False,
+            "matched_rule": None,
+            "excluded_from_sync": False,
+            "excluded_from_export": False,
+        }
+
+        for rule in self.rules:
+            if rule.component_type not in ("*", component_type):
+                continue
+
+            if self._pattern_matches(rule.pattern, name):
+                status["is_excluded"] = True
+                status["matched_rule"] = rule
+                status["excluded_from_sync"] = rule.exclude_from_sync
+                status["excluded_from_export"] = rule.exclude_from_export
+
+                # Check if it's an exact match (explicit)
+                if rule.pattern == name:
+                    status["is_explicit"] = True
+                break
+
+        return status

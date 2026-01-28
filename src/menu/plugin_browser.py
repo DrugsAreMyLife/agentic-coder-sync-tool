@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from menu.base import BaseMenu
 from utils.formatters import format_description
+from utils.exclusion_manager import ExclusionManager
 
 
 class PluginBrowser(BaseMenu):
@@ -20,6 +21,7 @@ class PluginBrowser(BaseMenu):
         super().__init__()
         self.syncer = syncer
         self.plugins = syncer.plugins
+        self.exclusion_manager = ExclusionManager()
 
     def run(self) -> Optional[str]:
         """Run the plugin browser loop."""
@@ -186,8 +188,21 @@ class PluginBrowser(BaseMenu):
             if not components:
                 print(f"  {c.colorize('No components', c.DIM)}")
 
+            # Export/Sync Exclusion Status
+            self.draw_section("EXPORT STATUS")
+            exclusion_status = self.exclusion_manager.get_exclusion_status("plugin", plugin.name)
+            if exclusion_status["is_excluded"]:
+                rule = exclusion_status["matched_rule"]
+                if exclusion_status["is_explicit"]:
+                    print(f"  {c.colorize('[EXCLUDED]', c.RED, c.BOLD)} Manually excluded from sync/export")
+                else:
+                    print(f"  {c.colorize('[EXCLUDED]', c.YELLOW)} Matches pattern: {rule.pattern}")
+                    print(f"  {c.colorize(f'Reason: {rule.reason}', c.DIM)}")
+            else:
+                print(f"  {c.colorize('[INCLUDED]', c.GREEN)} Will be included in sync/export")
+
             print()
-            print(f"  {c.colorize('[o] Open in editor', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
+            print(f"  {c.colorize('[o] Open in editor', c.DIM)}  {c.colorize('[x] Toggle Exclusion', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
 
             choice = self.prompt()
 
@@ -198,6 +213,17 @@ class PluginBrowser(BaseMenu):
                 subprocess.run(["code", str(plugin.source_path)], check=False)
                 self.print_success("Opened in editor")
                 self.wait_for_key()
+            elif choice.lower() == 'x':
+                self._toggle_exclusion(plugin)
+
+    def _toggle_exclusion(self, plugin) -> None:
+        """Toggle export/sync exclusion for a plugin."""
+        is_excluded, message = self.exclusion_manager.toggle_exclusion("plugin", plugin.name)
+
+        if is_excluded:
+            self.print_info(f"Plugin '{plugin.name}' is now EXCLUDED from sync/export")
+        else:
+            self.print_success(f"Plugin '{plugin.name}' is now INCLUDED in sync/export")
 
     def _count_items(self, path: Path, pattern: str) -> int:
         """Count items matching pattern in a directory."""

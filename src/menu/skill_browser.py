@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from menu.base import BaseMenu
 from utils.formatters import format_description, truncate
+from utils.exclusion_manager import ExclusionManager
 
 
 class SkillBrowser(BaseMenu):
@@ -20,6 +21,7 @@ class SkillBrowser(BaseMenu):
         super().__init__()
         self.syncer = syncer
         self.skills = syncer.skills
+        self.exclusion_manager = ExclusionManager()
         self.search_query = ""
         self.view_mode = "categorized"  # categorized, all, search
 
@@ -231,8 +233,21 @@ class SkillBrowser(BaseMenu):
                 status = "(synced)" if exists else "(not synced)"
                 print(f"  {indicator} {name:<15} {c.colorize(status, c.DIM)}")
 
+            # Export/Sync Exclusion Status
+            self.draw_section("EXPORT STATUS")
+            exclusion_status = self.exclusion_manager.get_exclusion_status("skill", skill.name)
+            if exclusion_status["is_excluded"]:
+                rule = exclusion_status["matched_rule"]
+                if exclusion_status["is_explicit"]:
+                    print(f"  {c.colorize('[EXCLUDED]', c.RED, c.BOLD)} Manually excluded from sync/export")
+                else:
+                    print(f"  {c.colorize('[EXCLUDED]', c.YELLOW)} Matches pattern: {rule.pattern}")
+                    print(f"  {c.colorize(f'Reason: {rule.reason}', c.DIM)}")
+            else:
+                print(f"  {c.colorize('[INCLUDED]', c.GREEN)} Will be included in sync/export")
+
             print()
-            print(f"  {c.colorize('[e] Edit', c.DIM)}  {c.colorize('[s] Sync', c.DIM)}  {c.colorize('[d] Delete', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
+            print(f"  {c.colorize('[e] Edit', c.DIM)}  {c.colorize('[s] Sync', c.DIM)}  {c.colorize('[x] Toggle Exclusion', c.DIM)}  {c.colorize('[d] Delete', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
 
             choice = self.prompt()
 
@@ -242,6 +257,8 @@ class SkillBrowser(BaseMenu):
                 self._edit_skill(skill)
             elif choice.lower() == 's':
                 self._sync_skill(skill)
+            elif choice.lower() == 'x':
+                self._toggle_exclusion(skill)
             elif choice.lower() == 'd':
                 if self._delete_skill(skill):
                     return
@@ -285,6 +302,15 @@ class SkillBrowser(BaseMenu):
             self.print_success(f"Synced to {target}")
 
         self.wait_for_key()
+
+    def _toggle_exclusion(self, skill) -> None:
+        """Toggle export/sync exclusion for a skill."""
+        is_excluded, message = self.exclusion_manager.toggle_exclusion("skill", skill.name)
+
+        if is_excluded:
+            self.print_info(f"Skill '{skill.name}' is now EXCLUDED from sync/export")
+        else:
+            self.print_success(f"Skill '{skill.name}' is now INCLUDED in sync/export")
 
     def _delete_skill(self, skill) -> bool:
         """Delete a skill after confirmation."""

@@ -27,3 +27,23 @@ Thumbs.db
 
 # Local overrides
 *.local.md
+
+# Platform sync output directories (generated)
+.agent/
+.claude/
+.codebuddy/
+.codex/
+.continue/
+.cursor/
+.gemini/
+.github/
+.kiro/
+.opencode/
+.qoder/
+.roo/
+.shared/
+.trae/
+.windsurf/
+
+# Plan files
+plan-*.md
