@@ -51,11 +51,23 @@ class AgentManager(BaseMenu):
                 self._do_search()
             elif choice.lower() == 'a':
                 self.view_mode = "all" if self.view_mode != "all" else "grouped"
+                self.current_page = 0  # Reset to first page
             elif choice.lower() == 'n':
                 self._create_agent()
             elif choice.lower() == 'g':
                 self.view_mode = "grouped"
                 self.search_query = ""
+                self.current_page = 0
+            elif choice == '<' or choice == ',':
+                # Previous page
+                if self.current_page > 0:
+                    self.current_page -= 1
+            elif choice == '>' or choice == '.':
+                # Next page
+                total = len(self.agents)
+                total_pages = (total + self.page_size - 1) // self.page_size
+                if self.current_page < total_pages - 1:
+                    self.current_page += 1
             elif choice.isdigit():
                 idx = int(choice)
                 agent = self._get_agent_by_index(idx)
@@ -93,11 +105,12 @@ class AgentManager(BaseMenu):
         print(f"  {c.colorize('[a] Show all', c.DIM)}  {c.colorize('[s] Search', c.DIM)}  {c.colorize('[n] New agent', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
 
     def _draw_all_list(self) -> None:
-        """Draw all agents in a flat list."""
+        """Draw all agents in a flat list with pagination."""
         c = self.colors
         total = len(self.agents)
+        total_pages = (total + self.page_size - 1) // self.page_size
 
-        self.draw_box("AGENT MANAGER", f"{total} agents")
+        self.draw_box("AGENT MANAGER", f"{total} agents - Page {self.current_page + 1}/{total_pages}")
 
         sorted_agents = sorted(self.agents, key=lambda a: a.name)
 
@@ -109,11 +122,16 @@ class AgentManager(BaseMenu):
             desc = format_description(agent.description, 35)
             print(f"  {c.colorize(f'[{idx}]', c.CYAN, c.BOLD)} {agent.name:<28} {c.colorize(desc, c.DIM)}")
 
-        # Pagination
-        total_pages = (total + self.page_size - 1) // self.page_size
-        current = self.current_page + 1
+        # Pagination controls
         print()
-        print(f"  Page {current}/{total_pages}")
+        nav_hints = []
+        if self.current_page > 0:
+            nav_hints.append(c.colorize('[<] Prev', c.DIM))
+        if self.current_page < total_pages - 1:
+            nav_hints.append(c.colorize('[>] Next', c.DIM))
+        if nav_hints:
+            print(f"  {' '.join(nav_hints)}")
+
         print(f"  {c.colorize('[g] Grouped', c.DIM)}  {c.colorize('[s] Search', c.DIM)}  {c.colorize('[n] New agent', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
 
     def _draw_search_results(self) -> None:
