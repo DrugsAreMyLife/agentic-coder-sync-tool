@@ -21,13 +21,30 @@ class MainMenu(BaseMenu):
 
     def run(self) -> Optional[str]:
         """Run the main menu loop."""
+        # Define menu options: (key, label, description)
+        menu_items = [
+            ("1", "Agent Manager", f"Browse, edit, and analyze agents"),
+            ("2", "Skill Browser", f"Manage skills"),
+            ("3", "Plugin Browser", f"Explore plugins and components"),
+            ("4", "Command Browser", f"View slash commands"),
+            ("5", "Hook Browser", f"Configure event hooks"),
+            ("6", "Sync to Platforms", "Export to other AI coding tools"),
+            ("7", "Workflow Designer", "Design agent handoff workflows"),
+            ("8", "Exclusion Manager", "Mark private/excluded components"),
+            ("C", "Compatibility Check", "Validate platform compatibility"),
+            ("P", "Platform Status", "Check installation status"),
+            ("E", "Export Bundle", "Create portable config archive"),
+            ("I", "Import Bundle", "Restore config from archive"),
+            ("0", "Exit", ""),
+        ]
+
         while True:
-            self.clear_screen()
-            self._draw_menu()
+            # Use arrow-key selection
+            choice = self._select_main_menu(menu_items)
 
-            choice = self.prompt()
-
-            if choice == '1':
+            if choice is None or choice == '0':
+                return None
+            elif choice == '1':
                 from .agent_manager import AgentManager
                 AgentManager(self.syncer).run()
             elif choice == '2':
@@ -51,20 +68,86 @@ class MainMenu(BaseMenu):
             elif choice == '8':
                 from .exclusion_menu import ExclusionMenu
                 ExclusionMenu(self.syncer).run()
-            elif choice.lower() == 'c':
+            elif choice.upper() == 'C':
                 from .compat_menu import CompatMenu
                 CompatMenu(self.syncer).run()
-            elif choice.lower() == 'p':
+            elif choice.upper() == 'P':
                 self._show_platform_status()
-            elif choice.lower() == 'e':
+            elif choice.upper() == 'E':
                 self._export_bundle()
-            elif choice.lower() == 'i':
+            elif choice.upper() == 'I':
                 self._import_bundle()
-            elif choice in ('0', 'q', 'quit', 'exit'):
+
+    def _select_main_menu(self, items: list) -> Optional[str]:
+        """Arrow-key selection for main menu."""
+        from menu.base import _get_key
+
+        c = self.colors
+        selected = 0
+
+        while True:
+            self.clear_screen()
+
+            # Header
+            self.draw_box("AGENT MANAGEMENT & SYNC SUITE")
+
+            # Summary counts
+            agent_count = len(self.syncer.agents)
+            skill_count = len(self.syncer.skills)
+            plugin_count = len(self.syncer.plugins)
+
+            summary = f"  {c.colorize(str(agent_count), c.CYAN)} agents | "
+            summary += f"{c.colorize(str(skill_count), c.CYAN)} skills | "
+            summary += f"{c.colorize(str(plugin_count), c.CYAN)} plugins"
+            print(summary)
+            print()
+
+            # Draw menu items with selection indicator
+            current_section = ""
+            sections = {
+                0: "Component Browsers:",
+                5: "Orchestration & Sync:",
+                8: "Utilities:",
+                12: "",  # Exit (no section)
+            }
+
+            for i, (key, label, desc) in enumerate(items):
+                # Section headers
+                if i in sections and sections[i]:
+                    print(f"\n  {c.colorize(sections[i], c.YELLOW, c.BOLD)}")
+
+                # Menu item
+                if i == selected:
+                    # Highlighted
+                    line = f"  > [{key}] {label}"
+                    if desc:
+                        line += f" - {desc}"
+                    print(c.colorize(line, c.CYAN, c.BOLD))
+                else:
+                    key_display = c.colorize(f"[{key}]", c.DIM)
+                    desc_display = f" - {c.colorize(desc, c.DIM)}" if desc else ""
+                    print(f"    {key_display} {label}{desc_display}")
+
+            # Footer
+            print()
+            print(f"  {c.colorize('[↑/↓] Navigate', c.DIM)}  {c.colorize('[Enter] Select', c.DIM)}  {c.colorize('[q] Quit', c.DIM)}")
+
+            # Get keypress
+            key = _get_key()
+
+            if key == 'up':
+                selected = (selected - 1) % len(items)
+            elif key == 'down':
+                selected = (selected + 1) % len(items)
+            elif key == 'enter':
+                return items[selected][0]
+            elif key == 'quit':
                 return None
-            else:
-                self.print_error("Invalid choice")
-                self.wait_for_key()
+            elif key.isdigit() or key.upper() in ('C', 'P', 'E', 'I'):
+                # Direct hotkey
+                for item_key, _, _ in items:
+                    if key.upper() == item_key.upper():
+                        return item_key
 
     def _draw_menu(self) -> None:
         """Draw the main menu."""

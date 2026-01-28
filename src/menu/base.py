@@ -3,12 +3,60 @@
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from menu.colors import Colors
+
+
+def _getch():
+    """Read a single character from stdin without echo."""
+    try:
+        # Unix/Mac
+        import tty
+        import termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
+    except ImportError:
+        # Windows
+        import msvcrt
+        return msvcrt.getch().decode('utf-8', errors='ignore')
+
+
+def _get_key():
+    """Get a keypress, handling arrow keys and special keys."""
+    ch = _getch()
+
+    # Handle escape sequences (arrow keys)
+    if ch == '\x1b':  # Escape
+        ch2 = _getch()
+        if ch2 == '[':
+            ch3 = _getch()
+            if ch3 == 'A':
+                return 'up'
+            elif ch3 == 'B':
+                return 'down'
+            elif ch3 == 'C':
+                return 'right'
+            elif ch3 == 'D':
+                return 'left'
+        return 'escape'
+    elif ch == '\r' or ch == '\n':
+        return 'enter'
+    elif ch == 'q' or ch == 'Q':
+        return 'quit'
+    elif ch == '\x03':  # Ctrl+C
+        return 'quit'
+
+    return ch
 
 
 class BaseMenu:
@@ -177,6 +225,129 @@ class BaseMenu:
         """Print an info message."""
         c = self.colors
         print(f"  {c.colorize('*', c.CYAN)} {message}")
+
+    def select_from_list(
+        self,
+        items: list,
+        title: str = "",
+        subtitle: str = "",
+        format_item: Callable = None,
+        allow_quit: bool = True
+    ) -> Optional[int]:
+        """
+        Interactive arrow-key selection from a list.
+
+        Args:
+            items: List of items to select from
+            title: Header title
+            subtitle: Header subtitle
+            format_item: Optional function to format each item for display
+            allow_quit: Whether 'q' exits (returns None)
+
+        Returns:
+            Selected index (0-based) or None if quit
+        """
+        if not items:
+            return None
+
+        c = self.colors
+        selected = 0
+
+        # Default format function
+        if format_item is None:
+            format_item = lambda i, item: f"  {item}"
+
+        while True:
+            # Clear and redraw
+            self.clear_screen()
+            if title:
+                self.draw_box(title, subtitle)
+
+            # Draw items
+            for i, item in enumerate(items):
+                if i == selected:
+                    # Highlighted selection
+                    line = format_item(i, item)
+                    print(c.colorize(f"> {line[2:]}", c.CYAN, c.BOLD))
+                else:
+                    print(format_item(i, item))
+
+            # Footer
+            print()
+            hints = [c.colorize("[↑/↓] Navigate", c.DIM), c.colorize("[Enter] Select", c.DIM)]
+            if allow_quit:
+                hints.append(c.colorize("[q] Back", c.DIM))
+            print(f"  {' '.join(hints)}")
+
+            # Get keypress
+            key = _get_key()
+
+            if key == 'up':
+                selected = (selected - 1) % len(items)
+            elif key == 'down':
+                selected = (selected + 1) % len(items)
+            elif key == 'enter':
+                return selected
+            elif key == 'quit' and allow_quit:
+                return None
+            elif key.isdigit():
+                # Allow number keys for quick jump
+                idx = int(key) - 1
+                if 0 <= idx < len(items):
+                    return idx
+
+    def select_menu(
+        self,
+        options: list[tuple[str, str]],
+        title: str = "",
+        subtitle: str = ""
+    ) -> Optional[str]:
+        """
+        Interactive menu selection with arrow keys.
+
+        Args:
+            options: List of (key, label) tuples
+            title: Header title
+            subtitle: Header subtitle
+
+        Returns:
+            Selected key or None if quit
+        """
+        c = self.colors
+        selected = 0
+
+        while True:
+            self.clear_screen()
+            if title:
+                self.draw_box(title, subtitle)
+
+            # Draw options
+            for i, (key, label) in enumerate(options):
+                if i == selected:
+                    print(c.colorize(f"  > [{key}] {label}", c.CYAN, c.BOLD))
+                else:
+                    print(f"    [{c.colorize(key, c.CYAN)}] {label}")
+
+            # Footer
+            print()
+            print(f"  {c.colorize('[↑/↓] Navigate', c.DIM)}  {c.colorize('[Enter] Select', c.DIM)}  {c.colorize('[q] Back', c.DIM)}")
+
+            # Get keypress
+            key_pressed = _get_key()
+
+            if key_pressed == 'up':
+                selected = (selected - 1) % len(options)
+            elif key_pressed == 'down':
+                selected = (selected + 1) % len(options)
+            elif key_pressed == 'enter':
+                return options[selected][0]
+            elif key_pressed == 'quit':
+                return None
+            else:
+                # Check if it's a hotkey
+                for opt_key, _ in options:
+                    if key_pressed.lower() == opt_key.lower():
+                        return opt_key
 
     def run(self) -> Optional[str]:
         """
