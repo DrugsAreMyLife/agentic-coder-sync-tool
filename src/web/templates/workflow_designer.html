@@ -1,0 +1,1820 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_new %}New Workflow{% else %}{{ workflow.name }}{% endif %} - Workflow Designer{% endblock %}
+
+{% block content %}
+<style>
+    .designer-container {
+        display: grid;
+        grid-template-columns: 200px 1fr 280px;
+        gap: 1rem;
+        height: calc(100vh - 200px);
+        min-height: 500px;
+    }
+
+    .designer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        gap: 1rem;
+    }
+
+    .designer-header input[name="name"] {
+        font-size: 1.5rem;
+        font-weight: 700;
+        background: transparent;
+        border: none;
+        color: var(--color-text);
+        padding: 0;
+        margin: 0;
+        width: 300px;
+    }
+
+    .designer-header input[name="name"]:focus {
+        outline: none;
+        border-bottom: 2px solid var(--color-cta);
+    }
+
+    .designer-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    /* Node Palette */
+    .node-palette {
+        background: var(--color-surface);
+        border-radius: 16px;
+        border: 1px solid var(--color-border);
+        padding: 1rem;
+        overflow-y: auto;
+    }
+
+    .node-palette h3 {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-muted);
+        margin: 0 0 1rem 0;
+    }
+
+    .palette-node {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        border-radius: 8px;
+        cursor: grab;
+        transition: all 200ms ease;
+        border: 1px solid var(--color-border);
+        background: var(--color-background);
+    }
+
+    .palette-node:hover {
+        border-color: var(--color-text-muted);
+        transform: translateX(2px);
+    }
+
+    .palette-node:active {
+        cursor: grabbing;
+    }
+
+    .palette-node .node-icon {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+    }
+
+    .palette-node .node-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    /* Node type colors */
+    .node-start .node-icon { background: rgba(34, 197, 94, 0.2); color: #22C55E; }
+    .node-end .node-icon { background: rgba(239, 68, 68, 0.2); color: #EF4444; }
+    .node-agent .node-icon { background: rgba(59, 130, 246, 0.2); color: #3B82F6; }
+    .node-conditional .node-icon { background: rgba(234, 179, 8, 0.2); color: #EAB308; }
+    .node-loop_start .node-icon, .node-loop_end .node-icon { background: rgba(168, 85, 247, 0.2); color: #A855F7; }
+    .node-hitl .node-icon { background: rgba(249, 115, 22, 0.2); color: #F97316; }
+    .node-wait .node-icon { background: rgba(107, 114, 128, 0.2); color: #6B7280; }
+    .node-parallel .node-icon, .node-join .node-icon { background: rgba(6, 182, 212, 0.2); color: #06B6D4; }
+
+    /* Canvas */
+    .canvas-container {
+        background: var(--color-surface);
+        border-radius: 16px;
+        border: 1px solid var(--color-border);
+        overflow: hidden;
+        position: relative;
+    }
+
+    #workflow-canvas {
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+
+    #workflow-canvas.dragging {
+        cursor: grabbing;
+    }
+
+    /* SVG Node styles */
+    .workflow-node {
+        cursor: pointer;
+    }
+
+    .workflow-node .node-bg {
+        fill: var(--color-background);
+        stroke: var(--color-border);
+        stroke-width: 2;
+        transition: all 200ms ease;
+    }
+
+    .workflow-node:hover .node-bg {
+        stroke: var(--color-text-muted);
+    }
+
+    .workflow-node.selected .node-bg {
+        stroke: var(--color-cta);
+        stroke-width: 3;
+    }
+
+    .workflow-node .node-header {
+        fill: var(--color-secondary);
+    }
+
+    .workflow-node .node-type {
+        fill: var(--color-text-muted);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .workflow-node .node-name {
+        fill: var(--color-text);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .workflow-node .node-desc {
+        fill: var(--color-text-muted);
+        font-size: 11px;
+    }
+
+    .port {
+        fill: var(--color-secondary);
+        stroke: var(--color-border);
+        stroke-width: 2;
+        cursor: crosshair;
+        transition: all 200ms ease;
+    }
+
+    .port:hover, .port.connecting {
+        fill: var(--color-cta);
+        stroke: var(--color-cta);
+        r: 8;
+    }
+
+    .connection {
+        fill: none;
+        stroke: var(--color-border);
+        stroke-width: 2;
+        pointer-events: none;
+    }
+
+    .connection.temp {
+        stroke: var(--color-cta);
+        stroke-dasharray: 5, 5;
+    }
+
+    /* Properties Panel */
+    .properties-panel {
+        background: var(--color-surface);
+        border-radius: 16px;
+        border: 1px solid var(--color-border);
+        padding: 1rem;
+        overflow-y: auto;
+    }
+
+    .properties-panel h3 {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-muted);
+        margin: 0 0 1rem 0;
+    }
+
+    .properties-panel .empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: var(--color-text-muted);
+    }
+
+    .property-group {
+        margin-bottom: 1rem;
+    }
+
+    .property-group label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--color-text-muted);
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .property-group input,
+    .property-group select,
+    .property-group textarea {
+        width: 100%;
+        background: var(--color-background);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 0.5rem;
+        color: var(--color-text);
+        font-size: 0.875rem;
+    }
+
+    .property-group input:focus,
+    .property-group select:focus,
+    .property-group textarea:focus {
+        border-color: var(--color-cta);
+        outline: none;
+    }
+
+    .property-group textarea {
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .property-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .property-actions button {
+        width: 100%;
+        font-size: 0.875rem;
+    }
+
+    /* Context menu */
+    .context-menu {
+        position: fixed;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 0.5rem 0;
+        min-width: 160px;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        display: none;
+    }
+
+    .context-menu.visible {
+        display: block;
+    }
+
+    .context-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: var(--color-text);
+        transition: background 200ms ease;
+    }
+
+    .context-menu-item:hover {
+        background: var(--color-secondary);
+    }
+
+    .context-menu-item.danger {
+        color: var(--color-danger);
+    }
+
+    .context-menu-divider {
+        height: 1px;
+        background: var(--color-border);
+        margin: 0.5rem 0;
+    }
+
+    /* Zoom controls */
+    .zoom-controls {
+        position: absolute;
+        bottom: 1rem;
+        right: 1rem;
+        display: flex;
+        gap: 0.25rem;
+        background: var(--color-background);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 0.25rem;
+    }
+
+    .zoom-controls button {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        color: var(--color-text-muted);
+        cursor: pointer;
+    }
+
+    .zoom-controls button:hover {
+        background: var(--color-secondary);
+        color: var(--color-text);
+    }
+
+    .type-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: var(--color-background);
+        border-radius: 8px;
+    }
+
+    .type-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .position-inputs {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .position-inputs input {
+        width: 50%;
+    }
+
+    /* Export dropdown */
+    .export-dropdown {
+        position: relative;
+        display: inline-block;
+    }
+
+    .export-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: 0.5rem;
+        min-width: 280px;
+        z-index: 100;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        display: none;
+        margin-top: 0.5rem;
+    }
+
+    .export-menu.visible {
+        display: block;
+    }
+
+    .export-option {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.75rem;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 200ms ease;
+        border: none;
+        background: transparent;
+        text-align: left;
+        width: 100%;
+        color: var(--color-text);
+    }
+
+    .export-option:hover {
+        background: var(--color-secondary);
+    }
+
+    .export-option .export-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+
+    .export-option .export-title i {
+        width: 16px;
+        height: 16px;
+    }
+
+    .export-option .export-desc {
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+        margin-left: 1.5rem;
+    }
+
+    .export-option .export-status {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        margin-left: 1.5rem;
+        margin-top: 0.25rem;
+    }
+
+    .export-option .export-status.exists {
+        color: #22C55E;
+    }
+
+    .export-option .export-status.not-exists {
+        color: var(--color-text-muted);
+    }
+
+    .export-divider {
+        height: 1px;
+        background: var(--color-border);
+        margin: 0.5rem 0;
+    }
+
+    .export-header {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-muted);
+        padding: 0.5rem 0.75rem 0.25rem;
+    }
+</style>
+
+<div class="breadcrumb">
+    <a href="/workflows">Workflows</a>
+    <i data-lucide="chevron-right"></i>
+    <span>{% if is_new %}New Workflow{% else %}{{ workflow.name }}{% endif %}</span>
+</div>
+
+<div class="designer-header">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <input type="text" name="name" id="workflow-name" value="{% if workflow %}{{ workflow.name }}{% else %}New Workflow{% endif %}" placeholder="Workflow name">
+        <input type="text" name="description" id="workflow-description" value="{% if workflow %}{{ workflow.description }}{% endif %}" placeholder="Description..." style="width: 300px; font-size: 0.875rem; color: var(--color-text-muted);">
+    </div>
+    <div class="designer-actions">
+        <div class="export-dropdown">
+            <button class="outline secondary" onclick="toggleExportMenu()" id="export-btn">
+                <i data-lucide="share" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+                Export
+            </button>
+            <div id="export-menu" class="export-menu">
+                <div class="export-header">Export to Claude Code</div>
+                <button class="export-option" onclick="exportToClaudeCode('skill')">
+                    <div class="export-title">
+                        <i data-lucide="sparkles"></i>
+                        Export as Skill
+                    </div>
+                    <div class="export-desc">Creates ~/.claude/skills/{id}/SKILL.md</div>
+                    <div class="export-status not-exists" id="status-skill">
+                        <i data-lucide="circle" style="width: 8px; height: 8px;"></i>
+                        Not exported
+                    </div>
+                </button>
+                <button class="export-option" onclick="exportToClaudeCode('command')">
+                    <div class="export-title">
+                        <i data-lucide="terminal"></i>
+                        Export as Command
+                    </div>
+                    <div class="export-desc">Creates /{id} slash command</div>
+                    <div class="export-status not-exists" id="status-command">
+                        <i data-lucide="circle" style="width: 8px; height: 8px;"></i>
+                        Not exported
+                    </div>
+                </button>
+                <button class="export-option" onclick="exportToClaudeCode('prompt')">
+                    <div class="export-title">
+                        <i data-lucide="file-text"></i>
+                        Export as Prompt
+                    </div>
+                    <div class="export-desc">Creates standalone .prompt.md file</div>
+                    <div class="export-status not-exists" id="status-prompt">
+                        <i data-lucide="circle" style="width: 8px; height: 8px;"></i>
+                        Not exported
+                    </div>
+                </button>
+                <div class="export-divider"></div>
+                <button class="export-option" onclick="smartExport()" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(59, 130, 246, 0.1)); border: 1px solid rgba(168, 85, 247, 0.3);">
+                    <div class="export-title" style="color: #A855F7;">
+                        <i data-lucide="wand-2"></i>
+                        Smart Export
+                    </div>
+                    <div class="export-desc">Auto-detect best export type based on complexity</div>
+                    <div class="export-status not-exists" id="status-smart">
+                        <i data-lucide="sparkles" style="width: 8px; height: 8px;"></i>
+                        Analyzes workflow structure
+                    </div>
+                </button>
+                <div class="export-divider"></div>
+                <button class="export-option" onclick="downloadWorkflowJSON()">
+                    <div class="export-title">
+                        <i data-lucide="download"></i>
+                        Download JSON
+                    </div>
+                    <div class="export-desc">Save workflow definition locally</div>
+                </button>
+            </div>
+        </div>
+        <button class="outline secondary" onclick="showHelp()">
+            <i data-lucide="help-circle" style="width: 16px; height: 16px;"></i>
+        </button>
+        <button id="save-btn" onclick="saveWorkflow()">
+            <i data-lucide="save" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+            Save
+        </button>
+    </div>
+</div>
+
+<div class="designer-container">
+    <!-- Node Palette -->
+    <div class="node-palette">
+        <h3>Nodes</h3>
+
+        <div class="palette-node node-start" draggable="true" data-type="start">
+            <div class="node-icon"><i data-lucide="play" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Start</span>
+        </div>
+
+        <div class="palette-node node-end" draggable="true" data-type="end">
+            <div class="node-icon"><i data-lucide="stop-circle" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">End</span>
+        </div>
+
+        <div class="palette-node node-agent" draggable="true" data-type="agent">
+            <div class="node-icon"><i data-lucide="bot" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Agent</span>
+        </div>
+
+        <div class="palette-node node-conditional" draggable="true" data-type="conditional">
+            <div class="node-icon"><i data-lucide="git-branch" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Conditional</span>
+        </div>
+
+        <div class="palette-node node-loop_start" draggable="true" data-type="loop_start">
+            <div class="node-icon"><i data-lucide="repeat" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Loop Start</span>
+        </div>
+
+        <div class="palette-node node-loop_end" draggable="true" data-type="loop_end">
+            <div class="node-icon"><i data-lucide="corner-down-left" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Loop End</span>
+        </div>
+
+        <div class="palette-node node-hitl" draggable="true" data-type="hitl">
+            <div class="node-icon"><i data-lucide="user-check" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">HITL</span>
+        </div>
+
+        <div class="palette-node node-wait" draggable="true" data-type="wait">
+            <div class="node-icon"><i data-lucide="pause" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Wait</span>
+        </div>
+
+        <div class="palette-node node-parallel" draggable="true" data-type="parallel">
+            <div class="node-icon"><i data-lucide="git-fork" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Parallel</span>
+        </div>
+
+        <div class="palette-node node-join" draggable="true" data-type="join">
+            <div class="node-icon"><i data-lucide="git-merge" style="width: 14px; height: 14px;"></i></div>
+            <span class="node-label">Join</span>
+        </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-container">
+        <svg id="workflow-canvas">
+            <!-- Grid background -->
+            <defs>
+                <pattern id="grid-small" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1E293B" stroke-width="0.5"/>
+                </pattern>
+                <pattern id="grid-large" width="100" height="100" patternUnits="userSpaceOnUse">
+                    <rect width="100" height="100" fill="url(#grid-small)"/>
+                    <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#334155" stroke-width="1"/>
+                </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid-large)"/>
+
+            <!-- Connections layer -->
+            <g id="connections-layer"></g>
+
+            <!-- Nodes layer -->
+            <g id="nodes-layer"></g>
+
+            <!-- Temporary connection line -->
+            <path id="temp-connection" class="connection temp" d="" style="display: none;"/>
+        </svg>
+
+        <div class="zoom-controls">
+            <button onclick="zoomIn()" title="Zoom In"><i data-lucide="plus" style="width: 16px; height: 16px;"></i></button>
+            <button onclick="zoomOut()" title="Zoom Out"><i data-lucide="minus" style="width: 16px; height: 16px;"></i></button>
+            <button onclick="zoomReset()" title="Reset Zoom"><i data-lucide="maximize" style="width: 16px; height: 16px;"></i></button>
+        </div>
+    </div>
+
+    <!-- Properties Panel -->
+    <div class="properties-panel">
+        <h3>Properties</h3>
+        <div id="properties-content">
+            <div class="empty-state">
+                <i data-lucide="mouse-pointer-click" style="width: 32px; height: 32px; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                <p>Select a node to view its properties</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="context-menu">
+    <div class="context-menu-item" onclick="duplicateNode()">
+        <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
+        Duplicate
+    </div>
+    <div class="context-menu-item" onclick="addChildNode()">
+        <i data-lucide="arrow-down" style="width: 14px; height: 14px;"></i>
+        Add Child Node
+    </div>
+    <div class="context-menu-item" onclick="setAsEntryPoint()">
+        <i data-lucide="log-in" style="width: 14px; height: 14px;"></i>
+        Set as Entry Point
+    </div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item danger" onclick="deleteSelectedNode()">
+        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+        Delete
+    </div>
+</div>
+
+<script>
+// ============ State ============
+const state = {
+    nodes: [],
+    edges: [],
+    selectedNode: null,
+    connectingFrom: null,
+    draggedNode: null,
+    dragOffset: { x: 0, y: 0 },
+    pan: { x: 0, y: 0 },
+    zoom: 1,
+    isPanning: false,
+    panStart: { x: 0, y: 0 },
+    workflowId: '{% if workflow %}{{ workflow.id }}{% else %}{% endif %}',
+    isNew: {{ 'true' if is_new else 'false' }},
+    entryPoint: null,
+};
+
+// Available agents from server
+const availableAgents = {{ agents | tojson | safe }};
+
+// Node dimensions
+const NODE_WIDTH = 180;
+const NODE_HEIGHT = 80;
+const PORT_RADIUS = 6;
+
+// Node type configs
+const nodeTypes = {
+    start: { icon: 'play', color: '#22C55E', label: 'Start', hasInput: false, hasOutput: true },
+    end: { icon: 'stop-circle', color: '#EF4444', label: 'End', hasInput: true, hasOutput: false },
+    agent: { icon: 'bot', color: '#3B82F6', label: 'Agent', hasInput: true, hasOutput: true },
+    conditional: { icon: 'git-branch', color: '#EAB308', label: 'Condition', hasInput: true, hasOutput: true },
+    loop_start: { icon: 'repeat', color: '#A855F7', label: 'Loop Start', hasInput: true, hasOutput: true },
+    loop_end: { icon: 'corner-down-left', color: '#A855F7', label: 'Loop End', hasInput: true, hasOutput: true },
+    hitl: { icon: 'user-check', color: '#F97316', label: 'HITL', hasInput: true, hasOutput: true },
+    wait: { icon: 'pause', color: '#6B7280', label: 'Wait', hasInput: true, hasOutput: true },
+    parallel: { icon: 'git-fork', color: '#06B6D4', label: 'Parallel', hasInput: true, hasOutput: true },
+    join: { icon: 'git-merge', color: '#06B6D4', label: 'Join', hasInput: true, hasOutput: true },
+};
+
+// ============ Initialization ============
+document.addEventListener('DOMContentLoaded', () => {
+    // Load existing workflow
+    const workflowData = {{ workflow_json | safe }};
+    if (workflowData) {
+        loadWorkflow(workflowData);
+    }
+
+    setupEventListeners();
+    lucide.createIcons();
+});
+
+function loadWorkflow(data) {
+    state.nodes = data.nodes || [];
+    state.edges = data.edges || [];
+    state.entryPoint = data.entry_point;
+    renderAll();
+}
+
+function setupEventListeners() {
+    const canvas = document.getElementById('workflow-canvas');
+    const container = document.querySelector('.canvas-container');
+
+    // Palette drag
+    document.querySelectorAll('.palette-node').forEach(node => {
+        node.addEventListener('dragstart', onPaletteDragStart);
+    });
+
+    // Canvas drop
+    container.addEventListener('dragover', e => e.preventDefault());
+    container.addEventListener('drop', onCanvasDrop);
+
+    // Canvas interactions
+    canvas.addEventListener('mousedown', onCanvasMouseDown);
+    canvas.addEventListener('mousemove', onCanvasMouseMove);
+    canvas.addEventListener('mouseup', onCanvasMouseUp);
+    canvas.addEventListener('mouseleave', onCanvasMouseUp);
+    canvas.addEventListener('wheel', onCanvasWheel);
+    canvas.addEventListener('contextmenu', onContextMenu);
+
+    // Click outside to deselect
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('context-menu');
+        if (!menu.contains(e.target)) {
+            menu.classList.remove('visible');
+        }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', onKeyDown);
+}
+
+// ============ Node Operations ============
+function createNode(type, x, y) {
+    const id = 'node-' + Date.now();
+    const config = nodeTypes[type];
+
+    const node = {
+        id,
+        type,
+        x: Math.round(x / 20) * 20, // Snap to grid
+        y: Math.round(y / 20) * 20,
+        agent: type === 'agent' ? '' : '',
+        description: '',
+        action: type === 'agent' ? 'execute' : type,
+        inputs: {},
+        outputs: [],
+        parameters: {},
+    };
+
+    state.nodes.push(node);
+
+    // Set entry point if this is the first start node
+    if (type === 'start' && !state.entryPoint) {
+        state.entryPoint = id;
+    }
+
+    renderAll();
+    selectNode(id);
+    return node;
+}
+
+function deleteNode(nodeId) {
+    state.nodes = state.nodes.filter(n => n.id !== nodeId);
+    state.edges = state.edges.filter(e => e.from !== nodeId && e.to !== nodeId);
+
+    if (state.selectedNode === nodeId) {
+        state.selectedNode = null;
+        updatePropertiesPanel();
+    }
+
+    if (state.entryPoint === nodeId) {
+        const startNode = state.nodes.find(n => n.type === 'start');
+        state.entryPoint = startNode ? startNode.id : (state.nodes[0]?.id || null);
+    }
+
+    renderAll();
+}
+
+function selectNode(nodeId) {
+    state.selectedNode = nodeId;
+    renderAll();
+    updatePropertiesPanel();
+}
+
+function updateNodeProperty(nodeId, property, value) {
+    const node = state.nodes.find(n => n.id === nodeId);
+    if (node) {
+        node[property] = value;
+        renderAll();
+    }
+}
+
+// ============ Edge Operations ============
+function createEdge(fromId, toId, condition) {
+    // Prevent duplicates
+    if (state.edges.some(e => e.from === fromId && e.to === toId)) return;
+
+    // Prevent self-connections
+    if (fromId === toId) return;
+
+    state.edges.push({ from: fromId, to: toId, condition: condition || null });
+    renderAll();
+}
+
+function deleteEdge(fromId, toId) {
+    state.edges = state.edges.filter(e => !(e.from === fromId && e.to === toId));
+    renderAll();
+}
+
+// ============ Rendering ============
+function renderAll() {
+    renderConnections();
+    renderNodes();
+}
+
+function renderNodes() {
+    const layer = document.getElementById('nodes-layer');
+    // Clear existing nodes
+    while (layer.firstChild) {
+        layer.removeChild(layer.firstChild);
+    }
+
+    state.nodes.forEach(node => {
+        const config = nodeTypes[node.type];
+        const isSelected = state.selectedNode === node.id;
+        const isEntry = state.entryPoint === node.id;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.classList.add('workflow-node');
+        if (isSelected) g.classList.add('selected');
+        g.setAttribute('data-id', node.id);
+        g.setAttribute('transform', 'translate(' + node.x + ', ' + node.y + ')');
+
+        // Node background
+        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        bg.classList.add('node-bg');
+        bg.setAttribute('width', NODE_WIDTH);
+        bg.setAttribute('height', NODE_HEIGHT);
+        bg.setAttribute('rx', 8);
+        g.appendChild(bg);
+
+        // Header background
+        const header = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        header.classList.add('node-header');
+        header.setAttribute('width', NODE_WIDTH);
+        header.setAttribute('height', 24);
+        header.setAttribute('rx', 8);
+        g.appendChild(header);
+
+        // Clip header bottom corners
+        const headerMask = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        headerMask.classList.add('node-header');
+        headerMask.setAttribute('y', 16);
+        headerMask.setAttribute('width', NODE_WIDTH);
+        headerMask.setAttribute('height', 8);
+        g.appendChild(headerMask);
+
+        // Type indicator circle
+        const typeCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        typeCircle.setAttribute('cx', 14);
+        typeCircle.setAttribute('cy', 12);
+        typeCircle.setAttribute('r', 5);
+        typeCircle.setAttribute('fill', config.color);
+        g.appendChild(typeCircle);
+
+        // Type label
+        const typeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        typeText.classList.add('node-type');
+        typeText.setAttribute('x', 26);
+        typeText.setAttribute('y', 16);
+        typeText.textContent = config.label + (isEntry ? ' (Entry)' : '');
+        g.appendChild(typeText);
+
+        // Node name/agent
+        const nameText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        nameText.classList.add('node-name');
+        nameText.setAttribute('x', 10);
+        nameText.setAttribute('y', 45);
+        nameText.textContent = node.agent || node.type;
+        g.appendChild(nameText);
+
+        // Description
+        if (node.description) {
+            const descText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            descText.classList.add('node-desc');
+            descText.setAttribute('x', 10);
+            descText.setAttribute('y', 65);
+            const descContent = node.description.length > 25 ? node.description.substring(0, 25) + '...' : node.description;
+            descText.textContent = descContent;
+            g.appendChild(descText);
+        }
+
+        // Input port
+        if (config.hasInput) {
+            const inputPort = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            inputPort.classList.add('port', 'input-port');
+            inputPort.setAttribute('cx', 0);
+            inputPort.setAttribute('cy', NODE_HEIGHT / 2);
+            inputPort.setAttribute('r', PORT_RADIUS);
+            inputPort.setAttribute('data-node', node.id);
+            inputPort.setAttribute('data-port', 'input');
+            g.appendChild(inputPort);
+        }
+
+        // Output port
+        if (config.hasOutput) {
+            const outputPort = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            outputPort.classList.add('port', 'output-port');
+            outputPort.setAttribute('cx', NODE_WIDTH);
+            outputPort.setAttribute('cy', NODE_HEIGHT / 2);
+            outputPort.setAttribute('r', PORT_RADIUS);
+            outputPort.setAttribute('data-node', node.id);
+            outputPort.setAttribute('data-port', 'output');
+            g.appendChild(outputPort);
+        }
+
+        layer.appendChild(g);
+    });
+}
+
+function renderConnections() {
+    const layer = document.getElementById('connections-layer');
+    // Clear existing connections
+    while (layer.firstChild) {
+        layer.removeChild(layer.firstChild);
+    }
+
+    state.edges.forEach(edge => {
+        const fromNode = state.nodes.find(n => n.id === edge.from);
+        const toNode = state.nodes.find(n => n.id === edge.to);
+        if (!fromNode || !toNode) return;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.classList.add('connection');
+
+        const x1 = fromNode.x + NODE_WIDTH;
+        const y1 = fromNode.y + NODE_HEIGHT / 2;
+        const x2 = toNode.x;
+        const y2 = toNode.y + NODE_HEIGHT / 2;
+
+        // Bezier curve
+        const dx = Math.abs(x2 - x1) / 2;
+        const d = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (x2 - dx) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+        path.setAttribute('d', d);
+
+        layer.appendChild(path);
+    });
+}
+
+// ============ Properties Panel ============
+function updatePropertiesPanel() {
+    const container = document.getElementById('properties-content');
+    const node = state.nodes.find(n => n.id === state.selectedNode);
+
+    // Clear existing content
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+
+    if (!node) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'empty-state';
+
+        const icon = document.createElement('i');
+        icon.setAttribute('data-lucide', 'mouse-pointer-click');
+        icon.style.cssText = 'width: 32px; height: 32px; margin-bottom: 0.5rem; opacity: 0.5;';
+        emptyDiv.appendChild(icon);
+
+        const p = document.createElement('p');
+        p.textContent = 'Select a node to view its properties';
+        emptyDiv.appendChild(p);
+
+        container.appendChild(emptyDiv);
+        lucide.createIcons();
+        return;
+    }
+
+    const config = nodeTypes[node.type];
+
+    // Node type display
+    const typeGroup = createPropertyGroup('Type');
+    const typeIndicator = document.createElement('div');
+    typeIndicator.className = 'type-indicator';
+
+    const typeDot = document.createElement('span');
+    typeDot.className = 'type-dot';
+    typeDot.style.background = config.color;
+    typeIndicator.appendChild(typeDot);
+
+    const typeLabel = document.createElement('span');
+    typeLabel.textContent = config.label;
+    typeIndicator.appendChild(typeLabel);
+
+    typeGroup.appendChild(typeIndicator);
+    container.appendChild(typeGroup);
+
+    // Agent selector (for agent nodes)
+    if (node.type === 'agent') {
+        const agentGroup = createPropertyGroup('Agent');
+        const select = document.createElement('select');
+        select.addEventListener('change', function() {
+            updateNodeProperty(node.id, 'agent', this.value);
+        });
+
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = 'Select agent...';
+        select.appendChild(defaultOpt);
+
+        availableAgents.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.name;
+            opt.textContent = a.name;
+            if (node.agent === a.name) opt.selected = true;
+            select.appendChild(opt);
+        });
+
+        agentGroup.appendChild(select);
+        container.appendChild(agentGroup);
+    }
+
+    // Description
+    const descGroup = createPropertyGroup('Description');
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'What does this step do?';
+    textarea.value = node.description || '';
+    textarea.addEventListener('change', function() {
+        updateNodeProperty(node.id, 'description', this.value);
+    });
+    descGroup.appendChild(textarea);
+    container.appendChild(descGroup);
+
+    // Conditional-specific
+    if (node.type === 'conditional') {
+        const condGroup = createPropertyGroup('Condition Expression');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = node.parameters.condition || '';
+        input.placeholder = 'e.g., output.success == true';
+        input.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'condition', this.value);
+        });
+        condGroup.appendChild(input);
+        container.appendChild(condGroup);
+    }
+
+    // Loop-specific
+    if (node.type === 'loop_start') {
+        const iterGroup = createPropertyGroup('Iterator Variable');
+        const iterInput = document.createElement('input');
+        iterInput.type = 'text';
+        iterInput.value = node.parameters.iterator || '';
+        iterInput.placeholder = 'e.g., item';
+        iterInput.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'iterator', this.value);
+        });
+        iterGroup.appendChild(iterInput);
+        container.appendChild(iterGroup);
+
+        const maxGroup = createPropertyGroup('Max Iterations');
+        const maxInput = document.createElement('input');
+        maxInput.type = 'number';
+        maxInput.value = node.parameters.maxIterations || 10;
+        maxInput.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'maxIterations', parseInt(this.value));
+        });
+        maxGroup.appendChild(maxInput);
+        container.appendChild(maxGroup);
+    }
+
+    // HITL-specific
+    if (node.type === 'hitl') {
+        const promptGroup = createPropertyGroup('Prompt Message');
+        const promptArea = document.createElement('textarea');
+        promptArea.placeholder = 'Message to show user';
+        promptArea.value = node.parameters.prompt || '';
+        promptArea.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'prompt', this.value);
+        });
+        promptGroup.appendChild(promptArea);
+        container.appendChild(promptGroup);
+
+        const respGroup = createPropertyGroup('Response Type');
+        const respSelect = document.createElement('select');
+        respSelect.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'responseType', this.value);
+        });
+        ['approve', 'text', 'choice'].forEach(val => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = val === 'approve' ? 'Approve/Reject' : val === 'text' ? 'Text Input' : 'Multiple Choice';
+            if (node.parameters.responseType === val) opt.selected = true;
+            respSelect.appendChild(opt);
+        });
+        respGroup.appendChild(respSelect);
+        container.appendChild(respGroup);
+    }
+
+    // Wait-specific
+    if (node.type === 'wait') {
+        const waitGroup = createPropertyGroup('Wait Type');
+        const waitSelect = document.createElement('select');
+        waitSelect.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'waitType', this.value);
+        });
+        ['time', 'event', 'input'].forEach(val => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = val === 'time' ? 'Duration' : val === 'event' ? 'Event' : 'User Input';
+            if (node.parameters.waitType === val) opt.selected = true;
+            waitSelect.appendChild(opt);
+        });
+        waitGroup.appendChild(waitSelect);
+        container.appendChild(waitGroup);
+
+        const durGroup = createPropertyGroup('Duration (seconds)');
+        const durInput = document.createElement('input');
+        durInput.type = 'number';
+        durInput.value = node.parameters.duration || 0;
+        durInput.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'duration', parseInt(this.value));
+        });
+        durGroup.appendChild(durInput);
+        container.appendChild(durGroup);
+    }
+
+    // Parallel/Join-specific
+    if (node.type === 'parallel' || node.type === 'join') {
+        const syncGroup = createPropertyGroup('Sync Mode');
+        const syncSelect = document.createElement('select');
+        syncSelect.addEventListener('change', function() {
+            updateNodeParameter(node.id, 'syncMode', this.value);
+        });
+        ['all', 'any'].forEach(val => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = val === 'all' ? 'Wait for All' : 'Wait for Any';
+            if (node.parameters.syncMode === val) opt.selected = true;
+            syncSelect.appendChild(opt);
+        });
+        syncGroup.appendChild(syncSelect);
+        container.appendChild(syncGroup);
+    }
+
+    // Position
+    const posGroup = createPropertyGroup('Position');
+    const posDiv = document.createElement('div');
+    posDiv.className = 'position-inputs';
+
+    const xInput = document.createElement('input');
+    xInput.type = 'number';
+    xInput.value = node.x;
+    xInput.addEventListener('change', function() {
+        updateNodeProperty(node.id, 'x', parseInt(this.value));
+    });
+    posDiv.appendChild(xInput);
+
+    const yInput = document.createElement('input');
+    yInput.type = 'number';
+    yInput.value = node.y;
+    yInput.addEventListener('change', function() {
+        updateNodeProperty(node.id, 'y', parseInt(this.value));
+    });
+    posDiv.appendChild(yInput);
+
+    posGroup.appendChild(posDiv);
+    container.appendChild(posGroup);
+
+    // Actions
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'property-actions';
+
+    const addChildBtn = createButton('Add Child Node', 'arrow-down', 'outline', addChildNode);
+    actionsDiv.appendChild(addChildBtn);
+
+    const duplicateBtn = createButton('Duplicate', 'copy', 'outline secondary', duplicateNode);
+    actionsDiv.appendChild(duplicateBtn);
+
+    const deleteBtn = createButton('Delete Node', 'trash-2', 'outline', deleteSelectedNode);
+    deleteBtn.style.color = 'var(--color-danger)';
+    deleteBtn.style.borderColor = 'var(--color-danger)';
+    actionsDiv.appendChild(deleteBtn);
+
+    container.appendChild(actionsDiv);
+    lucide.createIcons();
+}
+
+function createPropertyGroup(labelText) {
+    const group = document.createElement('div');
+    group.className = 'property-group';
+
+    const label = document.createElement('label');
+    label.textContent = labelText;
+    group.appendChild(label);
+
+    return group;
+}
+
+function createButton(text, iconName, classes, onclick) {
+    const btn = document.createElement('button');
+    btn.className = classes;
+    btn.addEventListener('click', onclick);
+
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', iconName);
+    icon.style.cssText = 'width: 14px; height: 14px; margin-right: 0.5rem;';
+    btn.appendChild(icon);
+
+    const span = document.createTextNode(text);
+    btn.appendChild(span);
+
+    return btn;
+}
+
+function updateNodeParameter(nodeId, param, value) {
+    const node = state.nodes.find(n => n.id === nodeId);
+    if (node) {
+        node.parameters[param] = value;
+    }
+}
+
+// ============ Event Handlers ============
+function onPaletteDragStart(e) {
+    e.dataTransfer.setData('node-type', e.currentTarget.dataset.type);
+}
+
+function onCanvasDrop(e) {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('node-type');
+    if (!type) return;
+
+    const canvas = document.getElementById('workflow-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left - state.pan.x) / state.zoom;
+    const y = (e.clientY - rect.top - state.pan.y) / state.zoom;
+
+    createNode(type, x, y);
+}
+
+function onCanvasMouseDown(e) {
+    const canvas = document.getElementById('workflow-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left - state.pan.x) / state.zoom;
+    const y = (e.clientY - rect.top - state.pan.y) / state.zoom;
+
+    // Check if clicking on a port
+    const port = e.target.closest('.port');
+    if (port) {
+        const nodeId = port.dataset.node;
+        const portType = port.dataset.port;
+
+        if (portType === 'output') {
+            state.connectingFrom = nodeId;
+            port.classList.add('connecting');
+        } else if (portType === 'input' && state.connectingFrom) {
+            createEdge(state.connectingFrom, nodeId);
+            state.connectingFrom = null;
+        }
+        return;
+    }
+
+    // Check if clicking on a node
+    const nodeEl = e.target.closest('.workflow-node');
+    if (nodeEl) {
+        const nodeId = nodeEl.dataset.id;
+        const node = state.nodes.find(n => n.id === nodeId);
+
+        if (e.button === 0) { // Left click
+            selectNode(nodeId);
+            state.draggedNode = nodeId;
+            state.dragOffset = {
+                x: x - node.x,
+                y: y - node.y
+            };
+            canvas.classList.add('dragging');
+        }
+        return;
+    }
+
+    // Clicking on canvas - start panning
+    if (e.button === 0) {
+        state.selectedNode = null;
+        updatePropertiesPanel();
+        renderAll();
+
+        // Enable panning on middle click or ctrl+left click
+        if (e.ctrlKey || e.button === 1) {
+            state.isPanning = true;
+            state.panStart = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
+            canvas.classList.add('dragging');
+        }
+    }
+}
+
+function onCanvasMouseMove(e) {
+    const canvas = document.getElementById('workflow-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left - state.pan.x) / state.zoom;
+    const y = (e.clientY - rect.top - state.pan.y) / state.zoom;
+
+    // Drawing connection line
+    if (state.connectingFrom) {
+        const fromNode = state.nodes.find(n => n.id === state.connectingFrom);
+        if (fromNode) {
+            const tempLine = document.getElementById('temp-connection');
+            const x1 = fromNode.x + NODE_WIDTH;
+            const y1 = fromNode.y + NODE_HEIGHT / 2;
+            const dx = Math.abs(x - x1) / 2;
+            const d = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (x - dx) + ' ' + y + ', ' + x + ' ' + y;
+            tempLine.setAttribute('d', d);
+            tempLine.style.display = 'block';
+        }
+    }
+
+    // Dragging node
+    if (state.draggedNode) {
+        const node = state.nodes.find(n => n.id === state.draggedNode);
+        if (node) {
+            node.x = Math.round((x - state.dragOffset.x) / 20) * 20;
+            node.y = Math.round((y - state.dragOffset.y) / 20) * 20;
+            renderAll();
+        }
+    }
+
+    // Panning
+    if (state.isPanning) {
+        state.pan.x = e.clientX - state.panStart.x;
+        state.pan.y = e.clientY - state.panStart.y;
+        updateTransform();
+    }
+}
+
+function onCanvasMouseUp(e) {
+    const canvas = document.getElementById('workflow-canvas');
+
+    // Clear connection state
+    if (state.connectingFrom) {
+        document.querySelectorAll('.port.connecting').forEach(p => p.classList.remove('connecting'));
+        document.getElementById('temp-connection').style.display = 'none';
+        state.connectingFrom = null;
+    }
+
+    // Clear drag state
+    state.draggedNode = null;
+    state.isPanning = false;
+    canvas.classList.remove('dragging');
+}
+
+function onCanvasWheel(e) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    state.zoom = Math.max(0.25, Math.min(2, state.zoom * delta));
+    updateTransform();
+}
+
+function onContextMenu(e) {
+    e.preventDefault();
+    const nodeEl = e.target.closest('.workflow-node');
+    if (nodeEl) {
+        selectNode(nodeEl.dataset.id);
+        const menu = document.getElementById('context-menu');
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+        menu.classList.add('visible');
+    }
+}
+
+function onKeyDown(e) {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (state.selectedNode && ['INPUT', 'TEXTAREA', 'SELECT'].indexOf(document.activeElement.tagName) === -1) {
+            deleteSelectedNode();
+            e.preventDefault();
+        }
+    }
+    if (e.key === 'Escape') {
+        state.selectedNode = null;
+        state.connectingFrom = null;
+        document.getElementById('context-menu').classList.remove('visible');
+        updatePropertiesPanel();
+        renderAll();
+    }
+}
+
+// ============ Transform ============
+function updateTransform() {
+    const nodesLayer = document.getElementById('nodes-layer');
+    const connectionsLayer = document.getElementById('connections-layer');
+    const transform = 'translate(' + state.pan.x + ', ' + state.pan.y + ') scale(' + state.zoom + ')';
+    nodesLayer.setAttribute('transform', transform);
+    connectionsLayer.setAttribute('transform', transform);
+}
+
+function zoomIn() {
+    state.zoom = Math.min(2, state.zoom * 1.2);
+    updateTransform();
+}
+
+function zoomOut() {
+    state.zoom = Math.max(0.25, state.zoom / 1.2);
+    updateTransform();
+}
+
+function zoomReset() {
+    state.zoom = 1;
+    state.pan = { x: 0, y: 0 };
+    updateTransform();
+}
+
+// ============ Actions ============
+function deleteSelectedNode() {
+    if (state.selectedNode) {
+        deleteNode(state.selectedNode);
+    }
+    document.getElementById('context-menu').classList.remove('visible');
+}
+
+function duplicateNode() {
+    const node = state.nodes.find(n => n.id === state.selectedNode);
+    if (node) {
+        const newNode = createNode(node.type, node.x + 40, node.y + 40);
+        newNode.agent = node.agent;
+        newNode.description = node.description;
+        newNode.parameters = Object.assign({}, node.parameters);
+        renderAll();
+        updatePropertiesPanel();
+    }
+    document.getElementById('context-menu').classList.remove('visible');
+}
+
+function addChildNode() {
+    const node = state.nodes.find(n => n.id === state.selectedNode);
+    if (node) {
+        const newNode = createNode('agent', node.x + NODE_WIDTH + 80, node.y);
+        createEdge(node.id, newNode.id);
+    }
+    document.getElementById('context-menu').classList.remove('visible');
+}
+
+function setAsEntryPoint() {
+    if (state.selectedNode) {
+        state.entryPoint = state.selectedNode;
+        renderAll();
+    }
+    document.getElementById('context-menu').classList.remove('visible');
+}
+
+// ============ Save/Load ============
+async function saveWorkflow() {
+    const name = document.getElementById('workflow-name').value.trim();
+    const description = document.getElementById('workflow-description').value.trim();
+
+    if (!name) {
+        alert('Please enter a workflow name');
+        return;
+    }
+
+    if (state.nodes.length === 0) {
+        alert('Please add at least one node to the workflow');
+        return;
+    }
+
+    // Generate ID from name if new
+    var workflowId = state.workflowId;
+    if (state.isNew || !workflowId) {
+        workflowId = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    }
+
+    const data = {
+        id: workflowId,
+        name: name,
+        description: description,
+        trigger: 'manual',
+        trigger_pattern: null,
+        entry_point: state.entryPoint || (state.nodes[0] ? state.nodes[0].id : null),
+        nodes: state.nodes,
+        edges: state.edges,
+        metadata: {},
+    };
+
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+        const url = state.isNew ? '/api/workflows' : '/api/workflows/' + workflowId;
+        const method = state.isNew ? 'POST' : 'PUT';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) throw new Error('Failed to save workflow');
+
+        const result = await response.json();
+        state.workflowId = result.id;
+        state.isNew = false;
+
+        // Update URL if new workflow
+        if (window.location.pathname === '/workflows/new') {
+            window.history.replaceState({}, '', '/workflows/' + result.id);
+        }
+
+        btn.textContent = 'Saved!';
+        setTimeout(function() {
+            btn.textContent = 'Save';
+            btn.disabled = false;
+        }, 1500);
+
+    } catch (error) {
+        console.error('Save error:', error);
+        btn.textContent = 'Error';
+        setTimeout(function() {
+            btn.textContent = 'Save';
+            btn.disabled = false;
+        }, 2000);
+    }
+}
+
+function downloadWorkflowJSON() {
+    const name = document.getElementById('workflow-name').value.trim() || 'workflow';
+    const data = {
+        id: state.workflowId || name.toLowerCase().replace(/\s+/g, '-'),
+        name: name,
+        description: document.getElementById('workflow-description').value.trim(),
+        trigger: 'manual',
+        entry_point: state.entryPoint,
+        nodes: state.nodes,
+        edges: state.edges,
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = data.id + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toggleExportMenu();
+}
+
+function toggleExportMenu() {
+    const menu = document.getElementById('export-menu');
+    menu.classList.toggle('visible');
+    if (menu.classList.contains('visible')) {
+        updateExportStatus();
+    }
+}
+
+function setExportStatusUI(el, exists, message) {
+    // Clear existing content safely
+    while (el.firstChild) {
+        el.removeChild(el.firstChild);
+    }
+
+    el.className = exists ? 'export-status exists' : 'export-status not-exists';
+
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', exists ? 'check-circle' : 'circle');
+    icon.style.cssText = 'width: 8px; height: 8px;';
+    el.appendChild(icon);
+
+    const text = document.createTextNode(' ' + message);
+    el.appendChild(text);
+}
+
+async function updateExportStatus() {
+    if (!state.workflowId || state.isNew) {
+        // Workflow not saved yet - show all as not exported
+        ['skill', 'command', 'prompt'].forEach(function(type) {
+            const el = document.getElementById('status-' + type);
+            if (el) {
+                setExportStatusUI(el, false, 'Save workflow first');
+            }
+        });
+        lucide.createIcons();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/workflows/' + state.workflowId + '/exports');
+        if (!response.ok) return;
+
+        const exports = await response.json();
+
+        ['skill', 'command', 'prompt'].forEach(function(type) {
+            const el = document.getElementById('status-' + type);
+            if (el) {
+                setExportStatusUI(el, exports[type], exports[type] ? 'Exported' : 'Not exported');
+            }
+        });
+
+        lucide.createIcons();
+    } catch (error) {
+        console.error('Failed to check export status:', error);
+    }
+}
+
+async function exportToClaudeCode(type) {
+    if (!state.workflowId || state.isNew) {
+        alert('Please save the workflow first before exporting.');
+        return;
+    }
+
+    const btn = document.getElementById('export-btn');
+    btn.disabled = true;
+
+    // Safe button content update
+    while (btn.firstChild) {
+        btn.removeChild(btn.firstChild);
+    }
+    const loaderIcon = document.createElement('i');
+    loaderIcon.setAttribute('data-lucide', 'loader');
+    loaderIcon.style.cssText = 'width: 16px; height: 16px; margin-right: 0.5rem;';
+    btn.appendChild(loaderIcon);
+    btn.appendChild(document.createTextNode('Exporting...'));
+    lucide.createIcons();
+
+    try {
+        const response = await fetch('/api/workflows/' + state.workflowId + '/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ export_type: type }),
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Export failed');
+        }
+
+        const result = await response.json();
+
+        // Show success notification
+        showNotification('Exported to ' + result.path, 'success');
+
+        // Update export status
+        await updateExportStatus();
+
+    } catch (error) {
+        console.error('Export error:', error);
+        showNotification('Export failed: ' + error.message, 'error');
+    } finally {
+        // Restore button content safely
+        while (btn.firstChild) {
+            btn.removeChild(btn.firstChild);
+        }
+        const shareIcon = document.createElement('i');
+        shareIcon.setAttribute('data-lucide', 'share');
+        shareIcon.style.cssText = 'width: 16px; height: 16px; margin-right: 0.5rem;';
+        btn.appendChild(shareIcon);
+        btn.appendChild(document.createTextNode('Export'));
+        btn.disabled = false;
+        lucide.createIcons();
+    }
+}
+
+function showNotification(message, type) {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.style.cssText = 'position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; border-radius: 8px; z-index: 1000; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; animation: slideIn 200ms ease;';
+
+    if (type === 'success') {
+        notification.style.background = 'rgba(34, 197, 94, 0.2)';
+        notification.style.border = '1px solid #22C55E';
+        notification.style.color = '#22C55E';
+    } else {
+        notification.style.background = 'rgba(239, 68, 68, 0.2)';
+        notification.style.border = '1px solid #EF4444';
+        notification.style.color = '#EF4444';
+    }
+
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', type === 'success' ? 'check-circle' : 'alert-circle');
+    icon.style.cssText = 'width: 16px; height: 16px;';
+    notification.appendChild(icon);
+    notification.appendChild(document.createTextNode(' ' + message));
+
+    document.body.appendChild(notification);
+    lucide.createIcons();
+
+    // Remove after 4 seconds
+    setTimeout(function() {
+        notification.style.animation = 'slideOut 200ms ease';
+        setTimeout(function() {
+            notification.remove();
+        }, 200);
+    }, 4000);
+}
+
+// Close export menu when clicking outside
+document.addEventListener('click', function(e) {
+    const dropdown = document.querySelector('.export-dropdown');
+    const menu = document.getElementById('export-menu');
+    if (dropdown && menu && !dropdown.contains(e.target)) {
+        menu.classList.remove('visible');
+    }
+});
+
+async function smartExport() {
+    if (!state.workflowId || state.isNew) {
+        alert('Please save the workflow first before exporting.');
+        return;
+    }
+
+    const btn = document.getElementById('export-btn');
+    btn.disabled = true;
+
+    // Update button to show analyzing
+    while (btn.firstChild) {
+        btn.removeChild(btn.firstChild);
+    }
+    const loaderIcon = document.createElement('i');
+    loaderIcon.setAttribute('data-lucide', 'loader');
+    loaderIcon.style.cssText = 'width: 16px; height: 16px; margin-right: 0.5rem; animation: spin 1s linear infinite;';
+    btn.appendChild(loaderIcon);
+    btn.appendChild(document.createTextNode('Analyzing...'));
+    lucide.createIcons();
+
+    try {
+        // Call smart export endpoint
+        const response = await fetch('/api/workflows/' + state.workflowId + '/smart-export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Smart export failed');
+        }
+
+        const result = await response.json();
+        const analysis = result.analysis;
+
+        // Build result message
+        var message = 'Complexity Score: ' + analysis.complexity_score + '/100\n\n';
+        message += 'Recommendation: ' + analysis.recommended_export.toUpperCase() + '\n';
+        message += 'Reason: ' + analysis.recommendation_reason + '\n\n';
+        message += 'Factors:\n';
+        analysis.reasons.forEach(function(reason) {
+            message += '  - ' + reason + '\n';
+        });
+
+        if (analysis.external_models && analysis.external_models.length > 0) {
+            message += '\nExternal Models Detected: ' + analysis.external_models.join(', ');
+        }
+
+        message += '\n\nExported to:\n';
+        Object.keys(result.exports).forEach(function(type) {
+            if (result.exports[type]) {
+                message += '  - ' + type + ': ' + result.exports[type] + '\n';
+            }
+        });
+
+        // Show notification
+        showNotification('Smart export complete! Exported as: ' + analysis.recommended_export, 'success');
+
+        // Update export status
+        await updateExportStatus();
+
+        // Close menu
+        document.getElementById('export-menu').classList.remove('visible');
+
+        // Show detailed analysis in console
+        console.log('Smart Export Analysis:', result);
+
+    } catch (error) {
+        console.error('Smart export error:', error);
+        showNotification('Smart export failed: ' + error.message, 'error');
+    } finally {
+        // Restore button
+        while (btn.firstChild) {
+            btn.removeChild(btn.firstChild);
+        }
+        const shareIcon = document.createElement('i');
+        shareIcon.setAttribute('data-lucide', 'share');
+        shareIcon.style.cssText = 'width: 16px; height: 16px; margin-right: 0.5rem;';
+        btn.appendChild(shareIcon);
+        btn.appendChild(document.createTextNode('Export'));
+        btn.disabled = false;
+        lucide.createIcons();
+    }
+}
+
+function showHelp() {
+    alert('Workflow Designer Help:\n\nADDING NODES:\n- Drag nodes from the left palette onto the canvas\n\nCONNECTING NODES:\n- Click and drag from an output port (right side) to an input port (left side)\n\nEDITING:\n- Click a node to select it and edit properties\n- Right-click a node for more options\n- Press Delete to remove selected node\n\nNAVIGATION:\n- Scroll to zoom in/out\n- Ctrl+drag or middle-click to pan\n\nSAVING:\n- Click Save to persist your workflow\n- Workflows are stored in ~/.claude/workflows/');
+}
+</script>
+{% endblock %}

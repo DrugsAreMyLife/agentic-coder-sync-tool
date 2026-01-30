@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Exclusion Rules{% endblock %}
+
+{% block content %}
+<h1>Exclusion Rules</h1>
+<p style="color: var(--color-text-muted); margin-bottom: 2rem;">
+    Manage which components are excluded from sync and export operations.
+</p>
+
+<div class="stats-grid">
+    <div class="stat-card" onclick="window.location='/agents'" style="cursor: pointer;">
+        <div class="number">{{ excluded_counts.agents }}/{{ total_agents }}</div>
+        <div class="label">Agents Excluded</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/skills'" style="cursor: pointer;">
+        <div class="number">{{ excluded_counts.skills }}/{{ total_skills }}</div>
+        <div class="label">Skills Excluded</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/plugins'" style="cursor: pointer;">
+        <div class="number">{{ excluded_counts.plugins }}/{{ total_plugins }}</div>
+        <div class="label">Plugins Excluded</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/commands'" style="cursor: pointer;">
+        <div class="number">{{ excluded_counts.commands }}/{{ total_commands }}</div>
+        <div class="label">Commands Excluded</div>
+    </div>
+</div>
+
+<div class="grid">
+    <article>
+        <header>
+            <h3>
+                <i data-lucide="list" style="width: 18px; height: 18px; display: inline; vertical-align: middle;"></i>
+                Current Rules ({{ rules|length }})
+            </h3>
+        </header>
+        <div style="padding-top: 1rem;">
+            {% if rules %}
+            <ul class="item-list" style="margin: 0;">
+                {% for rule in rules %}
+                <li style="flex-wrap: wrap;">
+                    <div style="flex: 1;">
+                        <div class="item-name">
+                            <code>{{ rule.pattern }}</code>
+                        </div>
+                        <div class="item-desc">
+                            {{ rule.reason }}
+                        </div>
+                        <div style="margin-top: 0.5rem;">
+                            <span class="badge badge-info">{{ rule.component_type }}</span>
+                            {% if rule.exclude_from_sync %}
+                            <span class="badge badge-excluded">sync</span>
+                            {% endif %}
+                            {% if rule.exclude_from_export %}
+                            <span class="badge badge-excluded">export</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <form method="post" action="/exclusions/{{ rule.id }}/delete" style="margin: 0;">
+                        <button type="submit" class="outline secondary" style="padding: 0.5rem 0.75rem;">
+                            <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                        </button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty-state">
+                <p>No exclusion rules defined.</p>
+            </div>
+            {% endif %}
+        </div>
+    </article>
+
+    <article>
+        <header>
+            <h3>
+                <i data-lucide="plus" style="width: 18px; height: 18px; display: inline; vertical-align: middle;"></i>
+                Add New Rule
+            </h3>
+        </header>
+        <div style="padding-top: 1.5rem;">
+            <form method="post" action="/exclusions/add">
+                <label>
+                    Component Type
+                    <select name="component_type" required>
+                        <option value="*">All Types</option>
+                        <option value="agent">Agents</option>
+                        <option value="skill">Skills</option>
+                        <option value="plugin">Plugins</option>
+                        <option value="command">Commands</option>
+                        <option value="hook">Hooks</option>
+                    </select>
+                </label>
+
+                <label>
+                    Pattern
+                    <input type="text" name="pattern" placeholder="e.g., *-private, my-*, secret*" required>
+                    <small style="color: var(--color-text-muted);">
+                        Use * for wildcard matching. Examples: *-private, my-*, *-local
+                    </small>
+                </label>
+
+                <label>
+                    Reason (optional)
+                    <input type="text" name="reason" placeholder="Why is this excluded?">
+                </label>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <label style="flex: 1;">
+                        <input type="checkbox" name="exclude_sync" value="true" checked>
+                        Exclude from Sync
+                    </label>
+                    <label style="flex: 1;">
+                        <input type="checkbox" name="exclude_export" value="true" checked>
+                        Exclude from Export
+                    </label>
+                </div>
+
+                <button type="submit" style="width: 100%; margin-top: 1rem;">
+                    <i data-lucide="plus"></i>
+                    Add Rule
+                </button>
+            </form>
+        </div>
+    </article>
+</div>
+
+<div class="detail-section" style="margin-top: 2rem;">
+    <h3>How Exclusions Work</h3>
+    <div style="color: var(--color-text-muted);">
+        <p><strong>Pattern Matching:</strong></p>
+        <ul>
+            <li><code>*-private</code> - Matches any name ending with "-private"</li>
+            <li><code>my-*</code> - Matches any name starting with "my-"</li>
+            <li><code>*secret*</code> - Matches any name containing "secret"</li>
+            <li><code>?</code> - Matches any single character</li>
+            <li>Exact names - Match only that specific component</li>
+        </ul>
+
+        <p style="margin-top: 1rem;"><strong>Contexts:</strong></p>
+        <ul>
+            <li><strong>Sync</strong> - Prevents component from being synced to other platforms</li>
+            <li><strong>Export</strong> - Prevents component from being included in export bundles</li>
+        </ul>
+
+        <p style="margin-top: 1rem;"><strong>Per-Component Toggle:</strong></p>
+        <p>You can also toggle exclusion for individual components from their detail pages.</p>
+    </div>
+</div>
+
+<script>lucide.createIcons();</script>
+{% endblock %}

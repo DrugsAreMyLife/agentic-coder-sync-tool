@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Workflows - Agent Management Suite{% endblock %}
+
+{% block content %}
+<style>
+    .export-badges {
+        display: flex;
+        gap: 0.25rem;
+        flex-wrap: wrap;
+    }
+    .export-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .export-badge.skill {
+        background: rgba(168, 85, 247, 0.15);
+        color: #A855F7;
+        border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+    .export-badge.command {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3B82F6;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .export-badge.prompt {
+        background: rgba(34, 197, 94, 0.15);
+        color: #22C55E;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .workflow-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+    .workflow-actions button {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.7rem;
+        border-radius: 4px;
+    }
+    .quick-export-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 0.25rem;
+        min-width: 140px;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        display: none;
+        margin-top: 0.25rem;
+    }
+    .quick-export-menu.visible {
+        display: block;
+    }
+    .quick-export-item {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: none;
+        background: transparent;
+        color: var(--color-text);
+        font-size: 0.75rem;
+        text-align: left;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+    .quick-export-item:hover {
+        background: var(--color-secondary);
+    }
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <div>
+        <h1>Workflows</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">{{ total }} workflow{% if total != 1 %}s{% endif %} defined</p>
+    </div>
+    <a href="/workflows/new" role="button">
+        <i data-lucide="plus" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+        New Workflow
+    </a>
+</div>
+
+<form class="search-form" action="/workflows" method="get">
+    <input type="search" name="search" placeholder="Search workflows..." value="{{ search }}">
+    <button type="submit">Search</button>
+    {% if search %}
+    <a href="/workflows" role="button" class="outline secondary">Clear</a>
+    {% endif %}
+</form>
+
+{% if workflows %}
+<div class="platform-grid">
+    {% for workflow in workflows %}
+    <div class="platform-card installed" style="flex-direction: column; align-items: flex-start; gap: 0.5rem;" data-workflow-id="{{ workflow.id }}">
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <i data-lucide="git-branch" style="width: 20px; height: 20px; color: var(--color-cta);"></i>
+                <a href="/workflows/{{ workflow.id }}" style="color: var(--color-text); text-decoration: none;">
+                    <strong>{{ workflow.name }}</strong>
+                </a>
+            </div>
+            <div class="workflow-actions">
+                <a href="/workflows/{{ workflow.id }}/run" role="button" class="outline" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">
+                    <i data-lucide="play" style="width: 12px; height: 12px; margin-right: 0.25rem;"></i>
+                    Run
+                </a>
+                <div style="position: relative;">
+                    <button class="outline secondary" style="padding: 0.25rem 0.5rem;" onclick="toggleQuickExport('{{ workflow.id }}')">
+                        <i data-lucide="share" style="width: 12px; height: 12px;"></i>
+                    </button>
+                    <div id="quick-export-{{ workflow.id }}" class="quick-export-menu">
+                        <button class="quick-export-item" onclick="quickExport('{{ workflow.id }}', 'skill')">
+                            <i data-lucide="sparkles" style="width: 12px; height: 12px; margin-right: 0.5rem;"></i>
+                            As Skill
+                        </button>
+                        <button class="quick-export-item" onclick="quickExport('{{ workflow.id }}', 'command')">
+                            <i data-lucide="terminal" style="width: 12px; height: 12px; margin-right: 0.5rem;"></i>
+                            As Command
+                        </button>
+                        <button class="quick-export-item" onclick="quickExport('{{ workflow.id }}', 'prompt')">
+                            <i data-lucide="file-text" style="width: 12px; height: 12px; margin-right: 0.5rem;"></i>
+                            As Prompt
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p style="color: var(--color-text-muted); font-size: 0.875rem; margin: 0;">{{ workflow.description[:80] }}{% if workflow.description|length > 80 %}...{% endif %}</p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; width: 100%; justify-content: space-between; align-items: center;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                <span class="badge badge-info">{{ workflow.steps|length }} step{% if workflow.steps|length != 1 %}s{% endif %}</span>
+                <span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.3);">{{ workflow.trigger }}</span>
+                <div class="export-badges" id="exports-{{ workflow.id }}">
+                    <!-- Export badges will be loaded dynamically -->
+                </div>
+            </div>
+            <a href="/workflows/{{ workflow.id }}" style="font-size: 0.75rem; color: var(--color-text-muted);">
+                <i data-lucide="edit" style="width: 12px; height: 12px;"></i>
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="git-branch" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+    <h3>No workflows found</h3>
+    {% if search %}
+    <p>No workflows match "{{ search }}"</p>
+    {% else %}
+    <p>Create your first workflow to orchestrate multi-agent tasks</p>
+    <a href="/workflows/new" role="button" style="margin-top: 1rem;">
+        <i data-lucide="plus" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+        Create Workflow
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+<script>
+    lucide.createIcons();
+
+    // Load export status for all workflows on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const cards = document.querySelectorAll('[data-workflow-id]');
+        cards.forEach(function(card) {
+            const workflowId = card.dataset.workflowId;
+            loadExportStatus(workflowId);
+        });
+    });
+
+    async function loadExportStatus(workflowId) {
+        try {
+            const response = await fetch('/api/workflows/' + workflowId + '/exports');
+            if (!response.ok) return;
+
+            const exports = await response.json();
+            const container = document.getElementById('exports-' + workflowId);
+            if (!container) return;
+
+            // Clear existing badges
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+
+            if (exports.skill) {
+                const badge = document.createElement('span');
+                badge.className = 'export-badge skill';
+                badge.textContent = 'Skill';
+                container.appendChild(badge);
+            }
+            if (exports.command) {
+                const badge = document.createElement('span');
+                badge.className = 'export-badge command';
+                badge.textContent = 'Cmd';
+                container.appendChild(badge);
+            }
+            if (exports.prompt) {
+                const badge = document.createElement('span');
+                badge.className = 'export-badge prompt';
+                badge.textContent = 'Prompt';
+                container.appendChild(badge);
+            }
+        } catch (error) {
+            console.error('Failed to load export status:', error);
+        }
+    }
+
+    function toggleQuickExport(workflowId) {
+        // Close all other menus first
+        document.querySelectorAll('.quick-export-menu.visible').forEach(function(menu) {
+            menu.classList.remove('visible');
+        });
+
+        const menu = document.getElementById('quick-export-' + workflowId);
+        if (menu) {
+            menu.classList.toggle('visible');
+        }
+    }
+
+    async function quickExport(workflowId, type) {
+        const menu = document.getElementById('quick-export-' + workflowId);
+        if (menu) {
+            menu.classList.remove('visible');
+        }
+
+        try {
+            const response = await fetch('/api/workflows/' + workflowId + '/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ export_type: type }),
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Export failed');
+            }
+
+            const result = await response.json();
+
+            // Show success message
+            showToast('Exported as ' + type + ' to ' + result.path);
+
+            // Reload export status for this workflow
+            loadExportStatus(workflowId);
+
+        } catch (error) {
+            console.error('Export error:', error);
+            showToast('Export failed: ' + error.message, 'error');
+        }
+    }
+
+    function showToast(message, type) {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; border-radius: 8px; z-index: 1000; font-size: 0.875rem; max-width: 400px; word-break: break-all;';
+
+        if (type === 'error') {
+            toast.style.background = 'rgba(239, 68, 68, 0.2)';
+            toast.style.border = '1px solid #EF4444';
+            toast.style.color = '#EF4444';
+        } else {
+            toast.style.background = 'rgba(34, 197, 94, 0.2)';
+            toast.style.border = '1px solid #22C55E';
+            toast.style.color = '#22C55E';
+        }
+
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(function() {
+            toast.remove();
+        }, 4000);
+    }
+
+    // Close quick export menus when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.quick-export-menu') && !e.target.closest('button[onclick*="toggleQuickExport"]')) {
+            document.querySelectorAll('.quick-export-menu.visible').forEach(function(menu) {
+                menu.classList.remove('visible');
+            });
+        }
+    });
+</script>
+{% endblock %}

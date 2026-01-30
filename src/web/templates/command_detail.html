@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ command.name }} - Commands{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="/commands">Commands</a>
+    <i data-lucide="chevron-right"></i>
+    <span>{{ command.name }}</span>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+    <div>
+        <h1>/{{ command.name }}</h1>
+        <p style="color: var(--color-text-muted);">{{ command.description }}</p>
+    </div>
+    <form method="post" action="/commands/{{ command.name }}/toggle-exclusion">
+        <button type="submit" class="{% if excluded %}outline{% endif %}">
+            {% if excluded %}
+            <i data-lucide="eye"></i> Include
+            {% else %}
+            <i data-lucide="eye-off"></i> Exclude
+            {% endif %}
+        </button>
+    </form>
+</div>
+
+{% if excluded %}
+<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem;">
+    <strong style="color: #F87171;">
+        <i data-lucide="alert-circle" style="width: 16px; height: 16px; display: inline; vertical-align: middle;"></i>
+        Excluded from Sync/Export
+    </strong>
+    {% if explicit %}
+    <span style="color: var(--color-text-muted); margin-left: 0.5rem;">(Explicitly excluded)</span>
+    {% else %}
+    <span style="color: var(--color-text-muted); margin-left: 0.5rem;">(Matched by pattern rule)</span>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if command.argument_hint %}
+<div class="detail-section">
+    <h3>Argument Hint</h3>
+    <code>{{ command.argument_hint }}</code>
+</div>
+{% endif %}
+
+{% if command.allowed_tools %}
+<div class="detail-section">
+    <h3>Allowed Tools</h3>
+    <div class="tool-tags">
+        {% for tool in command.allowed_tools %}
+        <span class="tool-tag">{{ tool }}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="detail-section">
+    <h3>Command Content</h3>
+    <div class="code-block">{{ command.content }}</div>
+</div>
+
+<div class="detail-section">
+    <h3>Source</h3>
+    <code>{{ command.source_path }}</code>
+</div>
+
+<script>lucide.createIcons();</script>
+{% endblock %}

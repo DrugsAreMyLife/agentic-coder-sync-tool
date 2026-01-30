@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Commands - Agent Management Suite{% endblock %}
+
+{% block content %}
+<h1>Slash Commands</h1>
+<p style="color: var(--color-text-muted); margin-bottom: 1.5rem;">
+    {{ total }} commands available
+</p>
+
+<form class="search-form" method="get">
+    <input type="text" name="search" placeholder="Search commands..." value="{{ search }}">
+    <button type="submit">
+        <i data-lucide="search"></i>
+        Search
+    </button>
+</form>
+
+{% if commands %}
+<ul class="item-list">
+    {% for item in commands %}
+    <li onclick="window.location='/commands/{{ item.command.name }}'">
+        <div>
+            <div class="item-name">/{{ item.command.name }}</div>
+            <div class="item-desc">{{ item.command.description[:80] }}{% if item.command.description|length > 80 %}...{% endif %}</div>
+        </div>
+        <div class="item-meta">
+            {% if item.command.allowed_tools %}
+            <span class="badge badge-info">{{ item.command.allowed_tools|length }} tools</span>
+            {% endif %}
+            {% if item.excluded %}
+            <span class="badge badge-excluded">Excluded</span>
+            {% endif %}
+        </div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">
+    <i data-lucide="terminal" style="width: 48px; height: 48px; margin-bottom: 1rem;"></i>
+    <p>No commands found{% if search %} matching "{{ search }}"{% endif %}.</p>
+</div>
+{% endif %}
+
+<script>lucide.createIcons();</script>
+{% endblock %}

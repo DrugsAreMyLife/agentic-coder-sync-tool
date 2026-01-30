@@ -3,66 +3,179 @@
 {% block title %}Sync - Agent Management Suite{% endblock %}
 
 {% block content %}
-<div class="breadcrumb">
-    <a href="/">Dashboard</a> / Sync
-</div>
-
 <h1>Platform Sync</h1>
-<p>Sync {{ agent_count }} agents and {{ skill_count }} skills to other platforms</p>
+<p style="color: var(--color-text-muted); margin-bottom: 2rem;">
+    Sync {{ agent_count }} agents and {{ skill_count }} skills to other platforms
+</p>
 
 {% if request.query_params.get('synced') %}
-<article style="background: #22c55e22; border-left: 3px solid #22c55e;">
-    <p>Sync completed successfully!</p>
-</article>
+<div class="success-message">
+    <i data-lucide="check-circle"></i>
+    <span>Successfully synced to {{ request.query_params.get('synced') }} platform(s)!</span>
+</div>
 {% endif %}
 
-<form method="post" action="/sync/run">
-    <h2>Compatible Platforms</h2>
-    <p>These platforms support SKILL.md format directly:</p>
+{% if request.query_params.get('error') %}
+<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; color: #F87171;">
+    <i data-lucide="alert-circle" style="width: 16px; height: 16px; display: inline; vertical-align: middle;"></i>
+    <span>No platforms selected. Please select at least one platform.</span>
+</div>
+{% endif %}
 
-    <div class="platform-grid">
-        {% for p in platforms if p.type == 'compatible' %}
-        <label class="platform-card {% if p.installed %}installed{% else %}not-installed{% endif %}">
-            <input type="checkbox" name="platforms" value="{{ p.name }}" {% if not p.installed %}disabled{% endif %}>
-            <div>
-                <strong>{{ p.name }}</strong>
-                <br>
-                <small>{% if p.installed %}Installed{% else %}Not installed{% endif %}</small>
-            </div>
-        </label>
-        {% endfor %}
+<form method="post" action="/sync/run" id="sync-form">
+    <input type="hidden" name="platforms" id="platforms-input" value="">
+
+    <div class="detail-section">
+        <h3>Compatible Platforms</h3>
+        <p style="color: var(--color-text-muted); margin-bottom: 1rem;">
+            These platforms support SKILL.md format directly:
+        </p>
+
+        <div class="platform-grid">
+            {% for p in platforms if p.type == 'compatible' %}
+            <label class="platform-card {% if p.installed %}installed{% else %}not-installed{% endif %}">
+                <input type="checkbox" class="platform-checkbox" value="{{ p.name }}" {% if not p.installed %}disabled{% endif %}>
+                <div>
+                    <strong>{{ p.name }}</strong>
+                    <br>
+                    <small style="color: var(--color-text-muted);">
+                        {% if p.installed %}
+                        <i data-lucide="check" style="width: 12px; height: 12px; display: inline; color: var(--color-cta);"></i>
+                        Installed
+                        {% else %}
+                        <i data-lucide="x" style="width: 12px; height: 12px; display: inline;"></i>
+                        Not installed
+                        {% endif %}
+                    </small>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
     </div>
 
-    <h2 style="margin-top: 2rem;">Conversion Required</h2>
-    <p>These platforms require format conversion:</p>
+    <div class="detail-section">
+        <h3>Conversion Required</h3>
+        <p style="color: var(--color-text-muted); margin-bottom: 1rem;">
+            These platforms require format conversion:
+        </p>
 
-    <div class="platform-grid">
-        {% for p in platforms if p.type == 'conversion' %}
-        <label class="platform-card {% if p.installed %}installed{% else %}not-installed{% endif %}">
-            <input type="checkbox" name="platforms" value="{{ p.name }}" {% if not p.installed %}disabled{% endif %}>
-            <div>
-                <strong>{{ p.name }}</strong>
-                <br>
-                <small>{% if p.installed %}Installed{% else %}Not installed{% endif %}</small>
-            </div>
-        </label>
-        {% endfor %}
+        <div class="platform-grid">
+            {% for p in platforms if p.type == 'conversion' %}
+            <label class="platform-card {% if p.installed %}installed{% else %}not-installed{% endif %}">
+                <input type="checkbox" class="platform-checkbox" value="{{ p.name }}" {% if not p.installed %}disabled{% endif %}>
+                <div>
+                    <strong>{{ p.name }}</strong>
+                    <br>
+                    <small style="color: var(--color-text-muted);">
+                        {% if p.installed %}
+                        <i data-lucide="check" style="width: 12px; height: 12px; display: inline; color: var(--color-cta);"></i>
+                        Installed
+                        {% else %}
+                        <i data-lucide="x" style="width: 12px; height: 12px; display: inline;"></i>
+                        Not installed
+                        {% endif %}
+                    </small>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
     </div>
 
-    <div style="margin-top: 2rem;">
-        <button type="submit">Sync Selected Platforms</button>
+    <div class="detail-section">
+        <h3>Sync Options</h3>
+        <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
+            <input type="checkbox" name="respect_exclusions" value="true" style="margin-top: 0.25rem;">
+            <div>
+                <strong>Respect exclusion rules</strong>
+                <p style="color: var(--color-text-muted); font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                    Skip components marked as excluded.
+                    <a href="/exclusions">Manage exclusions</a>
+                </p>
+            </div>
+        </label>
+    </div>
+
+    <div class="actions" style="margin-top: 1.5rem;">
+        <button type="submit" id="sync-btn">
+            <i data-lucide="refresh-cw"></i>
+            Sync Selected Platforms
+        </button>
+        <button type="button" class="outline" onclick="selectAll()">Select All Installed</button>
+        <button type="button" class="outline secondary" onclick="deselectAll()">Clear Selection</button>
+    </div>
+
+    <div id="sync-progress" style="display: none; margin-top: 1.5rem;">
+        <div class="detail-section">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div class="spinner" style="width: 20px; height: 20px; border: 2px solid var(--color-border); border-top-color: var(--color-cta); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span id="progress-message">Syncing...</span>
+            </div>
+        </div>
     </div>
 </form>
 
 <article style="margin-top: 2rem;">
     <header>
-        <h3>What Gets Synced</h3>
+        <h3>
+            <i data-lucide="info" style="width: 16px; height: 16px; display: inline; vertical-align: middle;"></i>
+            What Gets Synced
+        </h3>
     </header>
-    <ul>
+    <ul style="padding-left: 1.5rem; color: var(--color-text-muted);">
         <li><strong>Agents:</strong> Agent definitions with tools, model, and instructions</li>
-        <li><strong>Skills:</strong> SKILL.md files with descriptions and content</li>
-        <li><strong>Exclusions:</strong> Components marked as excluded will be skipped</li>
+        <li><strong>Skills:</strong> SKILL.md files with scripts, references, and assets</li>
+        <li><strong>Commands:</strong> Slash command definitions (for supported platforms)</li>
+        <li><strong>Hooks:</strong> Event hooks (for compatible platforms)</li>
+        <li><strong>MCP Servers:</strong> Model Context Protocol configurations</li>
     </ul>
-    <p><small>Sync creates copies in target platform directories. Original Claude Code files are never modified.</small></p>
+    <p style="margin-top: 1rem; font-size: 0.875rem;">
+        <i data-lucide="shield" style="width: 14px; height: 14px; display: inline; vertical-align: middle; color: var(--color-cta);"></i>
+        <strong>Safe:</strong> Sync creates copies in target platform directories. Original Claude Code files are never modified.
+    </p>
 </article>
+
+<style>
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+<script>
+    lucide.createIcons();
+
+    function updatePlatformsInput() {
+        const checkboxes = document.querySelectorAll('.platform-checkbox:checked');
+        const values = Array.from(checkboxes).map(cb => cb.value);
+        document.getElementById('platforms-input').value = values.join(',');
+    }
+
+    function selectAll() {
+        document.querySelectorAll('.platform-checkbox:not(:disabled)').forEach(cb => cb.checked = true);
+        updatePlatformsInput();
+    }
+
+    function deselectAll() {
+        document.querySelectorAll('.platform-checkbox').forEach(cb => cb.checked = false);
+        updatePlatformsInput();
+    }
+
+    // Update hidden input on change
+    document.querySelectorAll('.platform-checkbox').forEach(cb => {
+        cb.addEventListener('change', updatePlatformsInput);
+    });
+
+    // Form submission
+    document.getElementById('sync-form').addEventListener('submit', function(e) {
+        updatePlatformsInput();
+        const platforms = document.getElementById('platforms-input').value;
+        if (!platforms) {
+            e.preventDefault();
+            alert('Please select at least one platform.');
+            return;
+        }
+
+        document.getElementById('sync-btn').disabled = true;
+        document.getElementById('sync-progress').style.display = 'block';
+    });
+</script>
 {% endblock %}

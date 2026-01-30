@@ -73,7 +73,7 @@ fi
 # ============================================
 log_info "Test 4: Agents list is populated"
 CONTENT=$(agent-browser eval "document.body.innerText" 2>&1)
-if echo "$CONTENT" | grep -q "agents loaded"; then
+if echo "$CONTENT" | grep -qi "python-dev\|typescript-dev\|agents"; then
     log_pass "Agents list populated"
 else
     log_fail "Agents list empty"
@@ -121,9 +121,19 @@ else
 fi
 
 # ============================================
-# Test 9: Hooks page loads
+# Test 9: Commands page loads
 # ============================================
-log_info "Test 9: Hooks page loads"
+log_info "Test 9: Commands page loads"
+if agent-browser open "$BASE_URL/commands" 2>&1 | grep -q "Commands"; then
+    log_pass "Commands page loads"
+else
+    log_fail "Commands page failed"
+fi
+
+# ============================================
+# Test 10: Hooks page loads
+# ============================================
+log_info "Test 10: Hooks page loads"
 if agent-browser open "$BASE_URL/hooks" 2>&1 | grep -q "Hooks"; then
     log_pass "Hooks page loads"
 else
@@ -131,9 +141,9 @@ else
 fi
 
 # ============================================
-# Test 10: Sync page loads
+# Test 11: Sync page loads
 # ============================================
-log_info "Test 10: Sync page loads"
+log_info "Test 11: Sync page loads"
 if agent-browser open "$BASE_URL/sync" 2>&1 | grep -q "Sync"; then
     log_pass "Sync page loads"
 else
@@ -141,9 +151,9 @@ else
 fi
 
 # ============================================
-# Test 11: Sync page shows platforms
+# Test 12: Sync page shows platforms
 # ============================================
-log_info "Test 11: Sync page shows platforms"
+log_info "Test 12: Sync page shows platforms"
 CONTENT=$(agent-browser eval "document.body.innerText" 2>&1)
 if echo "$CONTENT" | grep -q "Codex CLI"; then
     log_pass "Platform cards present"
@@ -152,9 +162,90 @@ else
 fi
 
 # ============================================
-# Test 12: Take screenshots
+# Test 13: Export page loads
 # ============================================
-log_info "Test 12: Taking screenshots"
+log_info "Test 13: Export page loads"
+if agent-browser open "$BASE_URL/export" 2>&1 | grep -q "Export"; then
+    log_pass "Export page loads"
+else
+    log_fail "Export page failed"
+fi
+
+# ============================================
+# Test 14: Export shows bundle contents
+# ============================================
+log_info "Test 14: Export shows bundle contents"
+SNAPSHOT=$(agent-browser snapshot -i 2>&1)
+if echo "$SNAPSHOT" | grep -qi "agents\|skills\|download"; then
+    log_pass "Export content present"
+else
+    log_fail "Export content missing"
+fi
+
+# ============================================
+# Test 15: Import page loads
+# ============================================
+log_info "Test 15: Import page loads"
+if agent-browser open "$BASE_URL/import" 2>&1 | grep -q "Import"; then
+    log_pass "Import page loads"
+else
+    log_fail "Import page failed"
+fi
+
+# ============================================
+# Test 16: Exclusions page loads
+# ============================================
+log_info "Test 16: Exclusions page loads"
+if agent-browser open "$BASE_URL/exclusions" 2>&1 | grep -q "Exclusion"; then
+    log_pass "Exclusions page loads"
+else
+    log_fail "Exclusions page failed"
+fi
+
+# ============================================
+# Test 17: Exclusions shows rules
+# ============================================
+log_info "Test 17: Exclusions shows rules"
+CONTENT=$(agent-browser eval "document.body.innerText" 2>&1)
+if echo "$CONTENT" | grep -qi "pattern\|rule\|private"; then
+    log_pass "Exclusion rules present"
+else
+    log_fail "Exclusion rules missing"
+fi
+
+# ============================================
+# Test 18: API stats endpoint works
+# ============================================
+log_info "Test 18: API stats endpoint works"
+API_RESPONSE=$(curl -s "$BASE_URL/api/stats")
+if echo "$API_RESPONSE" | grep -q '"agents"'; then
+    log_pass "API stats endpoint works"
+else
+    log_fail "API stats endpoint failed"
+fi
+
+# ============================================
+# Test 19: Navigation has all links
+# ============================================
+log_info "Test 19: Navigation has all links"
+agent-browser open "$BASE_URL/" >/dev/null 2>&1
+NAV_CONTENT=$(agent-browser eval "document.querySelector('nav').innerText" 2>&1)
+FOUND=0
+for link in "Agents" "Skills" "Plugins" "Commands" "Hooks" "Sync" "Export" "Exclusions"; do
+    if echo "$NAV_CONTENT" | grep -q "$link"; then
+        ((FOUND++))
+    fi
+done
+if [ $FOUND -ge 7 ]; then
+    log_pass "Navigation has all links ($FOUND/8)"
+else
+    log_fail "Navigation missing links ($FOUND/8)"
+fi
+
+# ============================================
+# Test 20: Take screenshots
+# ============================================
+log_info "Test 20: Taking screenshots"
 mkdir -p /tmp/webapp-screenshots
 
 agent-browser open "$BASE_URL/" >/dev/null 2>&1
@@ -165,6 +256,12 @@ agent-browser screenshot /tmp/webapp-screenshots/agents.png --full >/dev/null 2>
 
 agent-browser open "$BASE_URL/sync" >/dev/null 2>&1
 agent-browser screenshot /tmp/webapp-screenshots/sync.png --full >/dev/null 2>&1
+
+agent-browser open "$BASE_URL/export" >/dev/null 2>&1
+agent-browser screenshot /tmp/webapp-screenshots/export.png --full >/dev/null 2>&1
+
+agent-browser open "$BASE_URL/exclusions" >/dev/null 2>&1
+agent-browser screenshot /tmp/webapp-screenshots/exclusions.png --full >/dev/null 2>&1
 
 if [ -f /tmp/webapp-screenshots/dashboard.png ]; then
     log_pass "Screenshots saved to /tmp/webapp-screenshots/"

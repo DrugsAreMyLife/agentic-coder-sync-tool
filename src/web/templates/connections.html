@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block title %}Connections - Agent Management Suite{% endblock %}
+
+{% block content %}
+<style>
+    .connections-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .connections-header h1 {
+        margin: 0;
+    }
+
+    .status-summary {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .status-pill.healthy {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ADE80;
+    }
+
+    .status-pill.warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: #FBBF24;
+    }
+
+    .status-pill.error {
+        background: rgba(239, 68, 68, 0.15);
+        color: #F87171;
+    }
+
+    .platform-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .platform-item {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 1rem;
+        align-items: center;
+        transition: border-color 200ms ease;
+    }
+
+    .platform-item:hover {
+        border-color: var(--color-text-muted);
+    }
+
+    .platform-item.healthy {
+        border-left: 4px solid #22C55E;
+    }
+
+    .platform-item.warning {
+        border-left: 4px solid #F59E0B;
+    }
+
+    .platform-item.error {
+        border-left: 4px solid #EF4444;
+    }
+
+    .platform-item.not-installed {
+        border-left: 4px solid var(--color-border);
+        opacity: 0.6;
+    }
+
+    .platform-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .platform-name {
+        font-weight: 600;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .platform-name .cli-tag {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--color-text-muted);
+        background: var(--color-background);
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .platform-details {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.875rem;
+        color: var(--color-text-muted);
+    }
+
+    .platform-details .detail {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .auth-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .auth-status.authenticated {
+        background: rgba(34, 197, 94, 0.1);
+        color: #4ADE80;
+    }
+
+    .auth-status.unauthenticated {
+        background: rgba(245, 158, 11, 0.1);
+        color: #FBBF24;
+    }
+
+    .auth-status.not-applicable {
+        background: rgba(107, 114, 128, 0.1);
+        color: #9CA3AF;
+    }
+
+    .auth-status.unknown {
+        background: rgba(107, 114, 128, 0.1);
+        color: #9CA3AF;
+    }
+
+    .platform-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .fix-section {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        background: rgba(245, 158, 11, 0.05);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+        border-radius: 8px;
+    }
+
+    .fix-section h4 {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #FBBF24;
+        margin: 0 0 0.5rem 0;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .fix-command {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.875rem;
+        background: var(--color-background);
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .fix-command code {
+        background: none;
+        padding: 0;
+    }
+
+    .copy-btn {
+        background: transparent;
+        border: none;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 4px;
+    }
+
+    .copy-btn:hover {
+        color: var(--color-cta);
+        background: var(--color-secondary);
+    }
+
+    .refresh-time {
+        font-size: 0.875rem;
+        color: var(--color-text-muted);
+    }
+
+    /* Expand/collapse for details */
+    .platform-expand {
+        display: none;
+        grid-column: 1 / -1;
+        padding-top: 1rem;
+        border-top: 1px solid var(--color-border);
+        margin-top: 0.5rem;
+    }
+
+    .platform-item.expanded .platform-expand {
+        display: block;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .detail-item label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .detail-item span {
+        font-size: 0.875rem;
+    }
+</style>
+
+<div class="connections-header">
+    <div>
+        <h1>Connection Monitor</h1>
+        <p class="refresh-time" id="last-checked">
+            Last checked: {{ status.last_checked[:19] }}
+        </p>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <div class="status-summary">
+            <div class="status-pill healthy">
+                <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i>
+                {{ status.healthy_count }} Connected
+            </div>
+            {% if status.warning_count > 0 %}
+            <div class="status-pill warning">
+                <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i>
+                {{ status.warning_count }} Need Auth
+            </div>
+            {% endif %}
+        </div>
+        <button class="outline" onclick="refreshAll()">
+            <i data-lucide="refresh-cw" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="platform-list" id="platform-list">
+    {% for platform in platforms %}
+    <div class="platform-item {% if platform.auth_status == 'authenticated' and platform.cli_available %}healthy{% elif platform.auth_status == 'unauthenticated' and platform.installed %}warning{% elif not platform.installed %}not-installed{% else %}{% endif %}" data-platform="{{ platform.cli_name }}">
+        <div class="platform-info">
+            <div class="platform-name">
+                {{ platform.name }}
+                <span class="cli-tag">{{ platform.cli_name }}</span>
+            </div>
+            <div class="platform-details">
+                <span class="detail">
+                    {% if platform.cli_available %}
+                    <i data-lucide="terminal" style="width: 14px; height: 14px; color: #4ADE80;"></i>
+                    CLI Available
+                    {% else %}
+                    <i data-lucide="terminal" style="width: 14px; height: 14px; color: #9CA3AF;"></i>
+                    CLI Not Found
+                    {% endif %}
+                </span>
+                <span class="detail">
+                    {% if platform.config_exists %}
+                    <i data-lucide="folder" style="width: 14px; height: 14px; color: #4ADE80;"></i>
+                    Configured
+                    {% else %}
+                    <i data-lucide="folder" style="width: 14px; height: 14px; color: #9CA3AF;"></i>
+                    Not Configured
+                    {% endif %}
+                </span>
+                {% if platform.auth_method %}
+                <span class="detail">
+                    <i data-lucide="key" style="width: 14px; height: 14px;"></i>
+                    {{ platform.auth_method | title }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="auth-status {{ platform.auth_status }}">
+            {% if platform.auth_status == 'authenticated' %}
+            <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i>
+            Authenticated
+            {% elif platform.auth_status == 'unauthenticated' %}
+            <i data-lucide="shield-off" style="width: 16px; height: 16px;"></i>
+            Not Authenticated
+            {% elif platform.auth_status == 'not_applicable' %}
+            <i data-lucide="minus" style="width: 16px; height: 16px;"></i>
+            N/A
+            {% else %}
+            <i data-lucide="help-circle" style="width: 16px; height: 16px;"></i>
+            Unknown
+            {% endif %}
+        </div>
+
+        <div class="platform-actions">
+            <button class="outline secondary" style="padding: 0.5rem;" onclick="toggleDetails(this)" title="Details">
+                <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+            </button>
+            <button class="outline secondary" style="padding: 0.5rem;" onclick="checkPlatform('{{ platform.cli_name }}')" title="Refresh">
+                <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+            </button>
+        </div>
+
+        <div class="platform-expand">
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <label>Config Path</label>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">
+                        {{ platform.config_path or 'Not set' }}
+                    </span>
+                </div>
+                <div class="detail-item">
+                    <label>CLI Version</label>
+                    <span>{{ platform.cli_version or 'Unknown' }}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Auth Details</label>
+                    <span>{{ platform.auth_details or 'None' }}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Last Checked</label>
+                    <span>{{ platform.last_checked[:19] }}</span>
+                </div>
+            </div>
+
+            {% if platform.fix_instructions %}
+            <div class="fix-section">
+                <h4>How to Fix</h4>
+                <p style="font-size: 0.875rem; color: var(--color-text-muted); margin: 0 0 0.5rem 0;">
+                    {{ platform.fix_instructions }}
+                </p>
+                {% if 'Run' in platform.fix_instructions %}
+                <div class="fix-command">
+                    <code>{{ platform.fix_instructions.split('`')[1] if '`' in platform.fix_instructions else '' }}</code>
+                    <button class="copy-btn" onclick="copyCommand(this)" title="Copy command">
+                        <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function toggleDetails(btn) {
+    const item = btn.closest('.platform-item');
+    item.classList.toggle('expanded');
+
+    const icon = btn.querySelector('i');
+    if (item.classList.contains('expanded')) {
+        icon.setAttribute('data-lucide', 'chevron-up');
+    } else {
+        icon.setAttribute('data-lucide', 'chevron-down');
+    }
+    lucide.createIcons();
+}
+
+async function checkPlatform(platformId) {
+    try {
+        const response = await fetch('/api/connections/' + platformId + '/check');
+        const data = await response.json();
+
+        // Update the UI for this platform
+        const item = document.querySelector('[data-platform="' + platformId + '"]');
+        if (item) {
+            // Update auth status class
+            item.className = 'platform-item';
+            if (data.auth_status === 'authenticated' && data.cli_available) {
+                item.classList.add('healthy');
+            } else if (data.auth_status === 'unauthenticated' && data.installed) {
+                item.classList.add('warning');
+            } else if (!data.installed) {
+                item.classList.add('not-installed');
+            }
+        }
+
+        // Show brief notification
+        console.log('Checked:', platformId, data.auth_status);
+
+    } catch (error) {
+        console.error('Check failed:', error);
+    }
+}
+
+async function refreshAll() {
+    const btn = document.querySelector('[onclick="refreshAll()"]');
+    btn.disabled = true;
+
+    const icon = btn.querySelector('i');
+    icon.style.animation = 'spin 1s linear infinite';
+
+    try {
+        const response = await fetch('/api/connections/check');
+        const data = await response.json();
+
+        // Update last checked time
+        document.getElementById('last-checked').textContent = 'Last checked: ' + data.last_checked.substring(0, 19);
+
+        // Reload page to show updated status
+        window.location.reload();
+
+    } catch (error) {
+        console.error('Refresh failed:', error);
+    } finally {
+        btn.disabled = false;
+        icon.style.animation = '';
+    }
+}
+
+function copyCommand(btn) {
+    const command = btn.previousElementSibling.textContent.trim();
+    navigator.clipboard.writeText(command).then(() => {
+        const icon = btn.querySelector('i');
+        icon.setAttribute('data-lucide', 'check');
+        lucide.createIcons();
+
+        setTimeout(() => {
+            icon.setAttribute('data-lucide', 'copy');
+            lucide.createIcons();
+        }, 1500);
+    });
+}
+
+// Add spin animation
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+document.head.appendChild(style);
+
+// Initialize icons
+lucide.createIcons();
+</script>
+{% endblock %}

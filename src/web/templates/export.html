@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Export Configuration{% endblock %}
+
+{% block content %}
+<h1>Export Configuration</h1>
+<p style="color: var(--color-text-muted); margin-bottom: 2rem;">
+    Create a portable bundle of your Claude Code configuration for backup or sharing.
+</p>
+
+<div class="grid">
+    <article>
+        <header>
+            <h3>
+                <i data-lucide="package" style="width: 18px; height: 18px; display: inline; vertical-align: middle;"></i>
+                Bundle Contents
+            </h3>
+        </header>
+        <div style="padding-top: 1.5rem;">
+            <table>
+                <tbody>
+                    <tr>
+                        <td><strong>Agents</strong></td>
+                        <td>{{ agents_total }}</td>
+                        <td style="color: var(--color-text-muted);">
+                            {% if agents_excluded > 0 %}({{ agents_excluded }} excluded){% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Skills</strong></td>
+                        <td>{{ skills_total }}</td>
+                        <td style="color: var(--color-text-muted);">
+                            {% if skills_excluded > 0 %}({{ skills_excluded }} excluded){% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Plugins</strong></td>
+                        <td>{{ plugins_total }}</td>
+                        <td style="color: var(--color-text-muted);">
+                            {% if plugins_excluded > 0 %}({{ plugins_excluded }} excluded){% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Commands</strong></td>
+                        <td>{{ commands_total }}</td>
+                        <td style="color: var(--color-text-muted);">
+                            {% if commands_excluded > 0 %}({{ commands_excluded }} excluded){% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <article>
+        <header>
+            <h3>
+                <i data-lucide="download" style="width: 18px; height: 18px; display: inline; vertical-align: middle;"></i>
+                Export Options
+            </h3>
+        </header>
+        <div style="padding-top: 1.5rem;">
+            <form method="post" action="/export/download">
+                <label>
+                    <input type="checkbox" name="include_plugins" value="true" checked>
+                    Include plugins
+                    <small style="display: block; color: var(--color-text-muted);">
+                        Plugins can be large. Disable for smaller bundles.
+                    </small>
+                </label>
+
+                <label>
+                    <input type="checkbox" name="respect_exclusions" value="true">
+                    Respect exclusion rules
+                    <small style="display: block; color: var(--color-text-muted);">
+                        Skip components marked as excluded.
+                    </small>
+                </label>
+
+                <button type="submit" style="width: 100%; margin-top: 1rem;">
+                    <i data-lucide="download"></i>
+                    Download Bundle
+                </button>
+            </form>
+        </div>
+    </article>
+</div>
+
+<div class="detail-section" style="margin-top: 2rem;">
+    <h3>What's Included</h3>
+    <ul style="color: var(--color-text-muted);">
+        <li><code>agents/</code> - All agent definition files (.md)</li>
+        <li><code>skills/</code> - Skill directories with SKILL.md and subdirectories</li>
+        <li><code>commands/</code> - Slash command definitions</li>
+        <li><code>hooks/</code> - Hook scripts</li>
+        <li><code>plugins/</code> - Full plugin directories (optional)</li>
+        <li><code>settings.json</code> - Hook configuration</li>
+        <li><code>.mcp.json</code> - MCP server configuration</li>
+        <li><code>CLAUDE.md</code> - Global instructions</li>
+        <li><code>manifest.json</code> - Bundle metadata</li>
+    </ul>
+</div>
+
+<div style="margin-top: 2rem;">
+    <h2>Import Configuration</h2>
+    <p style="color: var(--color-text-muted); margin-bottom: 1rem;">
+        Have a bundle to import? <a href="/import">Go to Import</a>
+    </p>
+</div>
+
+<script>lucide.createIcons();</script>
+{% endblock %}

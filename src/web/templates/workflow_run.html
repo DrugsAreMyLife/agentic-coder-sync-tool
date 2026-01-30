@@ -1,0 +1,762 @@
+{% extends "base.html" %}
+
+{% block title %}Run {{ workflow.name }} - Workflow Execution{% endblock %}
+
+{% block content %}
+<style>
+    .run-container {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 1rem;
+        height: calc(100vh - 200px);
+        min-height: 500px;
+    }
+
+    .run-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .run-header h1 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .run-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .run-status.idle {
+        background: rgba(107, 114, 128, 0.15);
+        color: #9CA3AF;
+    }
+
+    .run-status.running {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60A5FA;
+    }
+
+    .run-status.completed {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ADE80;
+    }
+
+    .run-status.error {
+        background: rgba(239, 68, 68, 0.15);
+        color: #F87171;
+    }
+
+    /* Main panel */
+    .main-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* Prompt input */
+    .prompt-section {
+        background: var(--color-surface);
+        border-radius: 16px;
+        border: 1px solid var(--color-border);
+        padding: 1.5rem;
+    }
+
+    .prompt-section h3 {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-muted);
+        margin: 0 0 1rem 0;
+    }
+
+    .prompt-input {
+        width: 100%;
+        min-height: 100px;
+        background: var(--color-background);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: 1rem;
+        color: var(--color-text);
+        font-size: 1rem;
+        font-family: inherit;
+        resize: vertical;
+    }
+
+    .prompt-input:focus {
+        border-color: var(--color-cta);
+        outline: none;
+    }
+
+    .prompt-input:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .prompt-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+
+    /* Workflow visualization */
+    .workflow-viz {
+        background: var(--color-surface);
+        border-radius: 16px;
+        border: 1px solid var(--color-border);
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .workflow-viz svg {
+        width: 100%;
+        height: 100%;
+    }
+
+    /* Node states */
+    .workflow-node .node-bg {
+        fill: var(--color-background);
+        stroke: var(--color-border);
+        stroke-width: 2;
+        transition: all 300ms ease;
+    }
+
+    .workflow-node.completed .node-bg {
+        stroke: #22C55E;
+        stroke-width: 3;
+    }
+
+    .workflow-node.active .node-bg {
+        stroke: #3B82F6;
+        stroke-width: 3;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .workflow-node.pending .node-bg {
+        stroke: var(--color-border);
+        opacity: 0.6;
+    }
+
+    @keyframes pulse {
+        0%, 100% { stroke-opacity: 1; }
+        50% { stroke-opacity: 0.5; }
+    }
+
+    .workflow-node .node-header {
+        fill: var(--color-secondary);
+    }
+
+    .workflow-node .node-type {
+        fill: var(--color-text-muted);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .workflow-node .node-name {
+        fill: var(--color-text);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .connection {
+        fill: none;
+        stroke: var(--color-border);
+        stroke-width: 2;
+    }
+
+    .connection.completed {
+        stroke: #22C55E;
+    }
+
+    /* Output panel */
+    .output-panel {
+        background: var(--color-surface);
+        border-radius: 16px;
+        border: 1px solid var(--color-border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .output-header {
+        padding: 1rem;
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .output-header h3 {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-muted);
+        margin: 0;
+    }
+
+    .output-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+
+    .step-output {
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .step-output:last-child {
+        border-bottom: none;
+    }
+
+    .step-output-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .step-output-header .step-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+
+    .step-output-header .step-icon.completed {
+        background: rgba(34, 197, 94, 0.15);
+        color: #22C55E;
+    }
+
+    .step-output-header .step-icon.active {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3B82F6;
+    }
+
+    .step-output-header .step-name {
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+
+    .step-output-body {
+        font-size: 0.875rem;
+        color: var(--color-text-muted);
+        background: var(--color-background);
+        padding: 0.75rem;
+        border-radius: 8px;
+        font-family: 'JetBrains Mono', monospace;
+        white-space: pre-wrap;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+
+    .empty-output {
+        text-align: center;
+        color: var(--color-text-muted);
+        padding: 2rem;
+    }
+
+    /* Progress indicator */
+    .progress-bar {
+        height: 4px;
+        background: var(--color-border);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 1rem;
+    }
+
+    .progress-bar-fill {
+        height: 100%;
+        background: var(--color-cta);
+        border-radius: 2px;
+        transition: width 300ms ease;
+    }
+</style>
+
+<div class="breadcrumb">
+    <a href="/workflows">Workflows</a>
+    <i data-lucide="chevron-right"></i>
+    <a href="/workflows/{{ workflow.id }}">{{ workflow.name }}</a>
+    <i data-lucide="chevron-right"></i>
+    <span>Run</span>
+</div>
+
+<div class="run-header">
+    <h1>
+        <i data-lucide="play-circle" style="width: 28px; height: 28px; color: var(--color-cta);"></i>
+        {{ workflow.name }}
+    </h1>
+    <div id="run-status" class="run-status idle">
+        <i data-lucide="circle" style="width: 12px; height: 12px;"></i>
+        <span>Ready</span>
+    </div>
+</div>
+
+<div class="run-container">
+    <div class="main-panel">
+        <!-- Prompt Input Section -->
+        <div class="prompt-section">
+            <h3>Your Task</h3>
+            <textarea id="prompt-input" class="prompt-input" placeholder="Describe what you want to accomplish...
+
+Example: Review the authentication module for security vulnerabilities and suggest improvements."></textarea>
+            <div class="prompt-actions">
+                <button id="start-btn" onclick="startWorkflow()">
+                    <i data-lucide="play" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+                    Start Workflow
+                </button>
+                <button id="stop-btn" class="outline secondary" onclick="stopWorkflow()" disabled>
+                    <i data-lucide="square" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+                    Stop
+                </button>
+            </div>
+            <div class="progress-bar" style="display: none;" id="progress-bar">
+                <div class="progress-bar-fill" id="progress-fill" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <!-- Workflow Visualization -->
+        <div class="workflow-viz">
+            <svg id="workflow-canvas">
+                <defs>
+                    <pattern id="grid-small" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1E293B" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid-small)"/>
+                <g id="connections-layer"></g>
+                <g id="nodes-layer"></g>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Output Panel -->
+    <div class="output-panel">
+        <div class="output-header">
+            <h3>Step Outputs</h3>
+            <button class="outline secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="clearOutputs()">Clear</button>
+        </div>
+        <div class="output-content" id="output-content">
+            <div class="empty-output">
+                <i data-lucide="terminal" style="width: 32px; height: 32px; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                <p>Agent outputs will appear here as the workflow executes</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// State
+const workflowData = {{ workflow_json | safe }};
+const state = {
+    runId: null,
+    status: 'idle',
+    currentStep: null,
+    completedSteps: [],
+    stepOutputs: {},
+};
+
+// Node dimensions
+const NODE_WIDTH = 160;
+const NODE_HEIGHT = 70;
+
+// Node type configs
+const nodeTypes = {
+    start: { color: '#22C55E', label: 'Start' },
+    end: { color: '#EF4444', label: 'End' },
+    agent: { color: '#3B82F6', label: 'Agent' },
+    conditional: { color: '#EAB308', label: 'Condition' },
+    loop_start: { color: '#A855F7', label: 'Loop Start' },
+    loop_end: { color: '#A855F7', label: 'Loop End' },
+    hitl: { color: '#F97316', label: 'HITL' },
+    wait: { color: '#6B7280', label: 'Wait' },
+    parallel: { color: '#06B6D4', label: 'Parallel' },
+    join: { color: '#06B6D4', label: 'Join' },
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    renderWorkflow();
+    lucide.createIcons();
+});
+
+function renderWorkflow() {
+    const nodesLayer = document.getElementById('nodes-layer');
+    const connectionsLayer = document.getElementById('connections-layer');
+
+    // Clear layers
+    while (nodesLayer.firstChild) nodesLayer.removeChild(nodesLayer.firstChild);
+    while (connectionsLayer.firstChild) connectionsLayer.removeChild(connectionsLayer.firstChild);
+
+    if (!workflowData || !workflowData.nodes) return;
+
+    // Render connections first
+    workflowData.edges.forEach(edge => {
+        const fromNode = workflowData.nodes.find(n => n.id === edge.from);
+        const toNode = workflowData.nodes.find(n => n.id === edge.to);
+        if (!fromNode || !toNode) return;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.classList.add('connection');
+        path.setAttribute('data-from', edge.from);
+        path.setAttribute('data-to', edge.to);
+
+        const x1 = fromNode.x + NODE_WIDTH;
+        const y1 = fromNode.y + NODE_HEIGHT / 2;
+        const x2 = toNode.x;
+        const y2 = toNode.y + NODE_HEIGHT / 2;
+
+        const dx = Math.abs(x2 - x1) / 2;
+        const d = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (x2 - dx) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+        path.setAttribute('d', d);
+
+        connectionsLayer.appendChild(path);
+    });
+
+    // Render nodes
+    workflowData.nodes.forEach(node => {
+        const config = nodeTypes[node.type] || { color: '#6B7280', label: node.type };
+        const isCompleted = state.completedSteps.includes(node.id);
+        const isActive = state.currentStep === node.id;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.classList.add('workflow-node');
+        if (isCompleted) g.classList.add('completed');
+        if (isActive) g.classList.add('active');
+        if (!isCompleted && !isActive) g.classList.add('pending');
+        g.setAttribute('data-id', node.id);
+        g.setAttribute('transform', 'translate(' + node.x + ', ' + node.y + ')');
+
+        // Background
+        const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        bg.classList.add('node-bg');
+        bg.setAttribute('width', NODE_WIDTH);
+        bg.setAttribute('height', NODE_HEIGHT);
+        bg.setAttribute('rx', 8);
+        g.appendChild(bg);
+
+        // Header
+        const header = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        header.classList.add('node-header');
+        header.setAttribute('width', NODE_WIDTH);
+        header.setAttribute('height', 22);
+        header.setAttribute('rx', 8);
+        g.appendChild(header);
+
+        const headerMask = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        headerMask.classList.add('node-header');
+        headerMask.setAttribute('y', 14);
+        headerMask.setAttribute('width', NODE_WIDTH);
+        headerMask.setAttribute('height', 8);
+        g.appendChild(headerMask);
+
+        // Type indicator
+        const typeCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        typeCircle.setAttribute('cx', 12);
+        typeCircle.setAttribute('cy', 11);
+        typeCircle.setAttribute('r', 4);
+        typeCircle.setAttribute('fill', config.color);
+        g.appendChild(typeCircle);
+
+        // Type label
+        const typeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        typeText.classList.add('node-type');
+        typeText.setAttribute('x', 22);
+        typeText.setAttribute('y', 14);
+        typeText.textContent = config.label;
+        g.appendChild(typeText);
+
+        // Status icon
+        if (isCompleted) {
+            const checkCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            checkCircle.setAttribute('cx', NODE_WIDTH - 12);
+            checkCircle.setAttribute('cy', 11);
+            checkCircle.setAttribute('r', 6);
+            checkCircle.setAttribute('fill', '#22C55E');
+            g.appendChild(checkCircle);
+        } else if (isActive) {
+            const activeCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            activeCircle.setAttribute('cx', NODE_WIDTH - 12);
+            activeCircle.setAttribute('cy', 11);
+            activeCircle.setAttribute('r', 6);
+            activeCircle.setAttribute('fill', '#3B82F6');
+            g.appendChild(activeCircle);
+        }
+
+        // Node name
+        const nameText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        nameText.classList.add('node-name');
+        nameText.setAttribute('x', 10);
+        nameText.setAttribute('y', 42);
+        const displayName = node.agent || node.type;
+        nameText.textContent = displayName.length > 18 ? displayName.substring(0, 18) + '...' : displayName;
+        g.appendChild(nameText);
+
+        // Description
+        if (node.description) {
+            const descText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            descText.setAttribute('x', 10);
+            descText.setAttribute('y', 58);
+            descText.setAttribute('fill', '#94A3B8');
+            descText.setAttribute('font-size', '10px');
+            const desc = node.description.length > 22 ? node.description.substring(0, 22) + '...' : node.description;
+            descText.textContent = desc;
+            g.appendChild(descText);
+        }
+
+        nodesLayer.appendChild(g);
+    });
+
+    // Update connection colors
+    document.querySelectorAll('.connection').forEach(conn => {
+        const fromId = conn.getAttribute('data-from');
+        if (state.completedSteps.includes(fromId)) {
+            conn.classList.add('completed');
+        }
+    });
+}
+
+function updateStatus(status, message) {
+    const statusEl = document.getElementById('run-status');
+    statusEl.className = 'run-status ' + status;
+
+    const iconMap = {
+        idle: 'circle',
+        running: 'loader',
+        completed: 'check-circle',
+        error: 'x-circle',
+    };
+
+    // Clear and rebuild
+    while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
+
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', iconMap[status] || 'circle');
+    icon.style.cssText = 'width: 12px; height: 12px;';
+    if (status === 'running') {
+        icon.style.animation = 'spin 1s linear infinite';
+    }
+    statusEl.appendChild(icon);
+
+    const span = document.createElement('span');
+    span.textContent = message || status.charAt(0).toUpperCase() + status.slice(1);
+    statusEl.appendChild(span);
+
+    lucide.createIcons();
+}
+
+function addOutput(stepId, agentName, output) {
+    const container = document.getElementById('output-content');
+
+    // Remove empty state if present
+    const emptyState = container.querySelector('.empty-output');
+    if (emptyState) {
+        container.removeChild(emptyState);
+    }
+
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'step-output';
+    stepDiv.setAttribute('data-step', stepId);
+
+    const header = document.createElement('div');
+    header.className = 'step-output-header';
+
+    const icon = document.createElement('div');
+    icon.className = 'step-icon completed';
+    const iconI = document.createElement('i');
+    iconI.setAttribute('data-lucide', 'check');
+    iconI.style.cssText = 'width: 12px; height: 12px;';
+    icon.appendChild(iconI);
+    header.appendChild(icon);
+
+    const name = document.createElement('span');
+    name.className = 'step-name';
+    name.textContent = agentName || stepId;
+    header.appendChild(name);
+
+    stepDiv.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'step-output-body';
+    body.textContent = output || 'Completed';
+    stepDiv.appendChild(body);
+
+    container.appendChild(stepDiv);
+    container.scrollTop = container.scrollHeight;
+
+    lucide.createIcons();
+}
+
+function clearOutputs() {
+    const container = document.getElementById('output-content');
+    while (container.firstChild) container.removeChild(container.firstChild);
+
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'empty-output';
+
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', 'terminal');
+    icon.style.cssText = 'width: 32px; height: 32px; margin-bottom: 0.5rem; opacity: 0.5;';
+    emptyDiv.appendChild(icon);
+
+    const p = document.createElement('p');
+    p.textContent = 'Agent outputs will appear here as the workflow executes';
+    emptyDiv.appendChild(p);
+
+    container.appendChild(emptyDiv);
+    lucide.createIcons();
+}
+
+async function startWorkflow() {
+    const prompt = document.getElementById('prompt-input').value.trim();
+    if (!prompt) {
+        alert('Please enter a task description');
+        return;
+    }
+
+    // Update UI
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('stop-btn').disabled = false;
+    document.getElementById('prompt-input').disabled = true;
+    document.getElementById('progress-bar').style.display = 'block';
+
+    updateStatus('running', 'Starting...');
+
+    try {
+        // Start workflow execution
+        const response = await fetch('/api/workflows/{{ workflow.id }}/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: prompt }),
+        });
+
+        if (!response.ok) throw new Error('Failed to start workflow');
+
+        const result = await response.json();
+        state.runId = result.run_id;
+        state.status = 'running';
+        state.currentStep = workflowData.entry_point;
+        state.completedSteps = [];
+
+        renderWorkflow();
+
+        // Start polling for updates (simulated execution)
+        simulateExecution();
+
+    } catch (error) {
+        console.error('Start error:', error);
+        updateStatus('error', 'Failed to start');
+        resetUI();
+    }
+}
+
+async function simulateExecution() {
+    // Get list of steps in order
+    const steps = [];
+    let currentId = workflowData.entry_point;
+
+    while (currentId) {
+        const step = workflowData.nodes.find(n => n.id === currentId);
+        if (!step) break;
+        steps.push(step);
+
+        // Find next step
+        const edge = workflowData.edges.find(e => e.from === currentId);
+        currentId = edge ? edge.to : null;
+    }
+
+    // Simulate each step
+    for (let i = 0; i < steps.length; i++) {
+        if (state.status !== 'running') break;
+
+        const step = steps[i];
+        state.currentStep = step.id;
+        renderWorkflow();
+
+        const progress = ((i + 0.5) / steps.length) * 100;
+        document.getElementById('progress-fill').style.width = progress + '%';
+        updateStatus('running', 'Executing: ' + (step.agent || step.type));
+
+        // Simulate work
+        await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+
+        // Mark complete
+        state.completedSteps.push(step.id);
+        state.stepOutputs[step.id] = generateSimulatedOutput(step);
+
+        addOutput(step.id, step.agent || step.type, state.stepOutputs[step.id]);
+
+        const finalProgress = ((i + 1) / steps.length) * 100;
+        document.getElementById('progress-fill').style.width = finalProgress + '%';
+    }
+
+    // Complete
+    state.status = 'completed';
+    state.currentStep = null;
+    renderWorkflow();
+    updateStatus('completed', 'Workflow Complete');
+
+    // Update run status on server
+    if (state.runId) {
+        await fetch('/api/workflows/runs/' + state.runId + '/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'completed' }),
+        });
+    }
+
+    resetUI();
+}
+
+function generateSimulatedOutput(step) {
+    const outputs = {
+        start: 'Workflow initialized. Processing input prompt...',
+        end: 'Workflow completed successfully.',
+        agent: 'Agent task completed. Analyzed input and generated response.',
+        conditional: 'Condition evaluated. Proceeding to next step.',
+        loop_start: 'Loop initialized. Beginning iteration.',
+        loop_end: 'Loop iteration complete.',
+        hitl: 'Human review requested. Awaiting approval.',
+        wait: 'Wait period completed.',
+        parallel: 'Parallel execution started.',
+        join: 'All parallel branches synchronized.',
+    };
+
+    return outputs[step.type] || 'Step completed.';
+}
+
+function stopWorkflow() {
+    state.status = 'cancelled';
+    updateStatus('error', 'Cancelled');
+    resetUI();
+}
+
+function resetUI() {
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('stop-btn').disabled = true;
+    document.getElementById('prompt-input').disabled = false;
+}
+
+// Add spin animation
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+document.head.appendChild(style);
+</script>
+{% endblock %}

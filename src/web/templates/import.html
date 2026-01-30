@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Import Configuration{% endblock %}
+
+{% block content %}
+<h1>Import Configuration</h1>
+<p style="color: var(--color-text-muted); margin-bottom: 2rem;">
+    Import a Claude Code configuration bundle to restore or merge settings.
+</p>
+
+{% if success %}
+<div class="success-message">
+    <i data-lucide="check-circle"></i>
+    <span>Configuration imported successfully!</span>
+</div>
+{% endif %}
+
+{% if error %}
+<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; color: #F87171;">
+    <i data-lucide="alert-circle" style="width: 16px; height: 16px; display: inline; vertical-align: middle;"></i>
+    <span>Import failed: {{ error }}</span>
+</div>
+{% endif %}
+
+<div class="grid">
+    <article>
+        <header>
+            <h3>
+                <i data-lucide="upload" style="width: 18px; height: 18px; display: inline; vertical-align: middle;"></i>
+                Upload Bundle
+            </h3>
+        </header>
+        <div style="padding-top: 1.5rem;">
+            <form method="post" action="/import/upload" enctype="multipart/form-data">
+                <label>
+                    Bundle File (.tar.gz)
+                    <input type="file" name="bundle" accept=".tar.gz,.gz" required>
+                </label>
+
+                <label>
+                    <input type="checkbox" name="merge" value="true">
+                    Merge with existing
+                    <small style="display: block; color: var(--color-text-muted);">
+                        If unchecked, existing configuration will be replaced.
+                    </small>
+                </label>
+
+                <label>
+                    <input type="checkbox" name="backup" value="true" checked>
+                    Create backup first
+                    <small style="display: block; color: var(--color-text-muted);">
+                        Recommended. Creates a backup before importing.
+                    </small>
+                </label>
+
+                <button type="submit" style="width: 100%; margin-top: 1rem;">
+                    <i data-lucide="upload"></i>
+                    Import Bundle
+                </button>
+            </form>
+        </div>
+    </article>
+
+    <article>
+        <header>
+            <h3>
+                <i data-lucide="info" style="width: 18px; height: 18px; display: inline; vertical-align: middle;"></i>
+                Import Modes
+            </h3>
+        </header>
+        <div style="padding-top: 1.5rem;">
+            <h4 style="margin-top: 0;">Replace Mode (Default)</h4>
+            <p style="color: var(--color-text-muted); font-size: 0.875rem;">
+                Completely replaces your current configuration with the bundle contents.
+                Useful for restoring from a backup or switching to a shared configuration.
+            </p>
+
+            <h4>Merge Mode</h4>
+            <p style="color: var(--color-text-muted); font-size: 0.875rem;">
+                Adds new components from the bundle while keeping your existing ones.
+                Skips components that already exist with the same name.
+                Useful for adding new agents/skills without losing your customizations.
+            </p>
+        </div>
+    </article>
+</div>
+
+<div style="margin-top: 2rem;">
+    <a href="/export">Back to Export</a>
+</div>
+
+<script>lucide.createIcons();</script>
+{% endblock %}
