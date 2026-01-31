@@ -47,3 +47,6 @@ Thumbs.db
 
 # Plan files
 plan-*.md
+
+# Archived planning docs
+docs/archived/
