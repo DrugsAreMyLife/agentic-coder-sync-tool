@@ -197,6 +197,14 @@ def strip_yaml_frontmatter(content: str) -> str:
     return content
 
 
+def codex_safe_name(name: str) -> str:
+    """Convert a name to Codex-compatible format (hyphens, not underscores).
+
+    OpenAI's Codex CLI requires hyphens in tool/skill names, not underscores.
+    """
+    return name.replace('_', '-')
+
+
 def extract_yaml_frontmatter(content: str) -> tuple[dict, str]:
     """Extract YAML frontmatter and body from markdown content."""
     if not content.startswith("---"):
@@ -565,8 +573,15 @@ class AgentSync:
     # Core Sync Methods
     # =========================================================================
 
-    def _sync_skills_to_directory(self, target_dir: Path, platform_name: str, with_frontmatter: bool = True):
-        """Sync skills to a target directory."""
+    def _sync_skills_to_directory(self, target_dir: Path, platform_name: str, with_frontmatter: bool = True, platform_id: str = ""):
+        """Sync skills to a target directory.
+
+        Args:
+            target_dir: Directory to sync skills into.
+            platform_name: Human-readable platform name for logging.
+            with_frontmatter: Whether to include YAML frontmatter in SKILL.md.
+            platform_id: Platform identifier (e.g. "codex") for platform-specific transforms.
+        """
         if not self.dry_run:
             target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -574,7 +589,9 @@ class AgentSync:
             if skill.source_platform != "claude":
                 continue
 
-            target_skill_dir = target_dir / skill.name
+            # Apply platform-specific name transforms
+            dir_name = codex_safe_name(skill.name) if platform_id == "codex" else skill.name
+            target_skill_dir = target_dir / dir_name
             if self.dry_run:
                 self.log(f"Would copy skill: {skill.name} -> {target_skill_dir}", "dry")
             else:
@@ -600,7 +617,9 @@ class AgentSync:
             if agent.source_platform != "claude":
                 continue
 
-            agent_skill_dir = agents_as_skills / agent.name
+            # Apply platform-specific name transforms
+            dir_name = codex_safe_name(agent.name) if platform_id == "codex" else agent.name
+            agent_skill_dir = agents_as_skills / dir_name
             if self.dry_run:
                 self.log(f"Would create agent-skill: {agent.name}", "dry")
             else:
@@ -610,16 +629,23 @@ class AgentSync:
                     desc = " ".join(desc)
                 desc = str(desc).replace('"', '\\"').replace('\n', ' ')[:200]
 
+                # Ensure description is never empty (Codex requires it)
+                if not desc or not desc.strip():
+                    desc = f"Claude agent: {agent.name}"
+
+                # Apply platform-specific name transforms to frontmatter
+                fm_name = codex_safe_name(agent.name) if platform_id == "codex" else agent.name
+
                 if with_frontmatter:
                     skill_content = f"""---
-name: {agent.name}
+name: {fm_name}
 description: "{desc}"
 ---
 
 {agent.content}
 """
                 else:
-                    skill_content = f"""# {agent.name}
+                    skill_content = f"""# {fm_name}
 
 {desc}
 
@@ -783,8 +809,11 @@ content = """
         if not self.dry_run:
             self.codex_dir.mkdir(parents=True, exist_ok=True)
 
-        # Sync skills (same format as Claude)
-        self._sync_skills_to_directory(self.codex_skills, "Codex CLI", with_frontmatter=True)
+        # Sync skills (Codex requires hyphens in names, not underscores)
+        self._sync_skills_to_directory(self.codex_skills, "Codex CLI", with_frontmatter=True, platform_id="codex")
+
+        # Sync MCP servers
+        self._sync_mcp_to_json(self.codex_dir / ".mcp.json", "Codex CLI", use_extension_path=False)
 
         # Generate AGENTS.md
         self._generate_agents_md(self.codex_agents_md)
@@ -1115,7 +1144,7 @@ content = """
         if self.agents:
             sections.append("## Specialized Agents\n\n")
             for agent in sorted(self.agents, key=lambda a: a.name):
-                sections.append(f"### {agent.name.replace('-', ' ').title()}\n\n")
+                sections.append(f"### {agent.name.replace('-', ' ').replace('_', ' ').title()}\n\n")
                 sections.append(f"**Purpose**: {agent.description}\n\n")
                 sections.append(agent.content[:2000])
                 sections.append("\n\n---\n\n")
